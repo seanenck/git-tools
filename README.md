@@ -14,6 +14,8 @@ has (potentially) uncommitted changes
 
 ### git-current-state
 
+Is the backend for `git-uncommitted` that processes state of a repository
+
 ## build
 
 clone and `make`
