@@ -16,8 +16,8 @@ jobs:
       matrix:
         os:
           - name: ubuntu-latest
-            image: "apt-get update && apt-get install just"
-            deps: "echo no deps"
+            image: null
+            deps: "apt-get update && apt-get install just"
             display: ubuntu
           - name: ubuntu-latest
             image: alpine:latest
