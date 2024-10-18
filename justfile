@@ -9,13 +9,3 @@ build target:
 
 clean:
   rm -f "git-"*
-
-#clean:
-#  rm -f {{objects}}
-#
-#$(OBJECTS): cmd/**/main.go src/*.go go.*
-#	cp src/* cmd/$@/
-#	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $@ cmd/$@/*
-#
-#clean:
-#	rm -f $(OBJECTS)
