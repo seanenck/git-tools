@@ -16,16 +16,16 @@ jobs:
       matrix:
         os:
           - name: ubuntu-latest
-            image: null
+            image: "apt-get update && apt-get install just"
             deps: "echo no deps"
             display: ubuntu
           - name: ubuntu-latest
             image: alpine:latest
-            deps: "apk add make"
+            deps: "apk add just"
             display: alpine
           - name: macos-latest
             image: null
-            deps: "echo no deps"
+            deps: "brew install just"
             display: macos
     runs-on: ${{ matrix.os.name }}
     name: ${{ matrix.os.display }}
@@ -40,4 +40,4 @@ jobs:
       - name: "deps"
         run: ${{ matrix.os.deps }}
       - name: "build"
-        run: make
+        run: just
