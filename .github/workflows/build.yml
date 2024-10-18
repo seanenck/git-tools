@@ -17,7 +17,7 @@ jobs:
         os:
           - name: ubuntu-latest
             image: null
-            deps: "apt-get update && apt-get install just"
+            deps: "sudo apt-get update && sudo apt-get install just"
             display: ubuntu
           - name: ubuntu-latest
             image: alpine:latest
