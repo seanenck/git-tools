@@ -18,4 +18,4 @@ Is the backend for `git-uncommitted` that processes state of a repository
 
 ## build
 
-clone and `make`
+clone and `just`
