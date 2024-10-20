@@ -52,13 +52,23 @@ func gitUncommitted() error {
 		}
 		return nil
 	}
-	in := strings.TrimSpace(os.Getenv("GIT_UNCOMMITTED"))
+	const key = "GIT_UNCOMMITTED"
+	in := strings.TrimSpace(os.Getenv(key))
 	if in == "" {
 		return nil
 	}
 	dirs, err := shell.Fields(in, os.Getenv)
 	if err != nil {
 		return err
+	}
+	home := os.Getenv("HOME")
+	if val := strings.ToLower(os.Getenv(key + "_HOME")); val != "" {
+		if val == "yes" || val == "1" || val == "true" {
+			if home == "" {
+				return errors.New("unable to process HOME, not set?")
+			}
+			dirs = append(dirs, filepath.Dir(home))
+		}
 	}
 
 	var wg sync.WaitGroup
@@ -91,12 +101,11 @@ func gitUncommitted() error {
 	if isMessage {
 		prefix = "  "
 	}
-	home := os.Getenv("HOME")
 	for _, a := range all {
 		res := <-a
 		if res != "" {
 			for _, line := range strings.Split(res, "\n") {
-				results = append(results, fmt.Sprintf("%s%s", prefix, strings.Replace(line, home, "", 1)))
+				results = append(results, fmt.Sprintf("%s%s", prefix, strings.Replace(line, home, "~", 1)))
 			}
 		}
 	}
