@@ -83,7 +83,7 @@ func gitUncommitted() error {
 			}
 			for _, child := range children {
 				childPath := filepath.Join(path, child.Name())
-				if !pathExists(filepath.Join(childPath, ".git")) {
+				if !PathExists(filepath.Join(childPath, ".git")) {
 					continue
 				}
 				r := make(chan string)
@@ -117,11 +117,4 @@ func gitUncommitted() error {
 		fmt.Println(strings.Join(results, "\n"))
 	}
 	return nil
-}
-
-func pathExists(file string) bool {
-	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-	return true
 }
