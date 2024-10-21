@@ -197,7 +197,7 @@ func processFile(item dotfile, to string, v any, c chan result, fxn func(string,
 	c <- *r
 }
 
-func diffing(vars variables, s Settings) (bool, error) {
+func diffing(vars variables, s Settings) error {
 	type diffResult struct {
 		item dotfile
 		res  []byte
@@ -225,15 +225,13 @@ func diffing(vars variables, s Settings) (bool, error) {
 	slices.SortFunc(results, func(x, y diffResult) int {
 		return strings.Compare(x.item.offset, y.item.offset)
 	})
-	differences := false
 	for _, item := range results {
-		differences = true
 		fmt.Fprintf(s.Writer, "-> %s\n", item.item.display())
 		if s.Verbose {
 			fmt.Fprintln(s.Writer, string(item.res))
 		}
 	}
-	return differences, err
+	return err
 }
 
 func deploy(vars variables, s Settings) error {
@@ -395,14 +393,7 @@ func Do(s Settings) error {
 		}
 		return t.Execute(os.Stdout, arguments)
 	case arguments.Diff:
-		had, err := diffing(vars, s)
-		if err != nil {
-			return err
-		}
-		if had {
-			os.Exit(1)
-		}
-		return nil
+		return diffing(vars, s)
 	case arguments.Deploy:
 		return deploy(vars, s)
 	}
