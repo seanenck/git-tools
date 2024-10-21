@@ -172,7 +172,7 @@ func processFile(item dotfile, to string, v any, c chan result, fxn func(string,
 	c <- *r
 }
 
-func diffing(vars variables, verbose bool) (bool, error) {
+func diffing(vars variables, prefix string, verbose bool) (bool, error) {
 	type diffResult struct {
 		item dotfile
 		res  []byte
@@ -203,7 +203,7 @@ func diffing(vars variables, verbose bool) (bool, error) {
 	differences := false
 	for _, item := range results {
 		differences = true
-		fmt.Printf("-> %s\n", item.item.display())
+		fmt.Printf("%s-> %s\n", prefix, item.item.display())
 		if verbose {
 			fmt.Println(string(item.res))
 		}
@@ -359,6 +359,9 @@ func run() error {
 
 	count := len(args)
 	switch args[1] {
+	case IsMessageOfTheDay:
+		_, err := diffing(vars, MessageOfTheDayPrefix, false)
+		return err
 	case "completions":
 		t, err := template.New("c").Parse(bashShell)
 		if err != nil {
@@ -375,7 +378,7 @@ func run() error {
 					return errors.New("unknown argument for diff")
 				}
 			}
-			had, err := diffing(vars, verbose)
+			had, err := diffing(vars, "", verbose)
 			if err != nil {
 				return err
 			}

@@ -97,9 +97,9 @@ func gitUncommitted() error {
 	wg.Wait()
 	var results []string
 	prefix := ""
-	isMessage := op == "motd"
+	isMessage := op == IsMessageOfTheDay
 	if isMessage {
-		prefix = "  "
+		prefix = MessageOfTheDayPrefix
 	}
 	for _, a := range all {
 		res := <-a
@@ -110,9 +110,6 @@ func gitUncommitted() error {
 		}
 	}
 	if len(results) > 0 {
-		if isMessage {
-			fmt.Println("uncommitted\n===")
-		}
 		sort.Strings(results)
 		fmt.Println(strings.Join(results, "\n"))
 	}
