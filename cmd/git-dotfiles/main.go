@@ -253,13 +253,13 @@ func deploy(vars variables, dryRun, overwrite, force bool) error {
 		}
 		fmt.Printf("-> %s%s\n", item.item.display(), status)
 		if !force {
-			if dryRun {
-				continue
-			}
 			if item.exists && !overwrite {
 				fmt.Println("    ^ skipped")
 				continue
 			}
+		}
+		if dryRun {
+			continue
 		}
 		h := filepath.Join(vars.home, item.item.offset)
 		dir := filepath.Dir(h)
@@ -271,6 +271,9 @@ func deploy(vars variables, dryRun, overwrite, force bool) error {
 		if err := os.WriteFile(h, item.contents, item.item.info.Mode()); err != nil {
 			return err
 		}
+	}
+	if dryRun {
+		fmt.Println("\n[DRYRUN] no changes made")
 	}
 	return nil
 }
@@ -391,9 +394,18 @@ func run() error {
 		dryRun := false
 		force := false
 		overwrite := false
-		if count <= 3 {
-			if count == 3 {
-				switch strings.ToLower(args[2]) {
+		if count <= 4 {
+			var seen []string
+			for _, a := range []int{2, 3} {
+				if count < a+1 {
+					continue
+				}
+				cmd := args[a]
+				if slices.Contains(seen, cmd) {
+					return errors.New("flag specified multiple times")
+				}
+				seen = append(seen, cmd)
+				switch strings.ToLower(cmd) {
 				case arguments.Args.DryRun:
 					dryRun = true
 				case arguments.Args.Force:
@@ -403,6 +415,9 @@ func run() error {
 				default:
 					return errors.New("unknown argument for deploy")
 				}
+			}
+			if force && overwrite {
+				return errors.New("can not force and overwrite (force implies overwrite)")
 			}
 			return deploy(vars, dryRun, overwrite, force)
 		}

@@ -1,5 +1,5 @@
 _git_dotfiles() {
-  local cur opts chosen offset
+  local cur opts chosen offset subset
   cur=${COMP_WORDS[COMP_CWORD]}
   offset=1
   chosen=${COMP_WORDS[1]}
@@ -8,18 +8,36 @@ _git_dotfiles() {
       offset=2
     fi
   fi
+  chosen=${COMP_WORDS[$offset]}
+  subset=$((offset+1))
   if [ "$COMP_CWORD" -eq $offset ]; then
     opts="{{ $.Deploy }} {{ $.Diff }}"
   else
-    chosen=${COMP_WORDS[$offset]}
-    case "$chosen" in
-      "{{ $.Deploy }}")
-        opts="{{ $.Args.DryRun }} {{ $.Args.Force }} {{ $.Args.Overwrite }}"
-      ;;
-      "{{ $.Diff }}")
-        opts="{{ $.Args.Verbose }}"
-      ;;
-    esac
+    if [ "$COMP_CWORD" -eq $subset ]; then
+      case "$chosen" in
+        "{{ $.Deploy }}")
+          opts="{{ $.Args.DryRun }} {{ $.Args.Force }} {{ $.Args.Overwrite }}"
+        ;;
+        "{{ $.Diff }}")
+          opts="{{ $.Args.Verbose }}"
+        ;;
+      esac
+    else
+      offset=$((subset+1))
+      if [ "$COMP_CWORD" -eq $offset ]; then
+        if [ "$chosen" = "{{ $.Deploy }}" ]; then
+          chosen=${COMP_WORDS[$subset]}
+          case "$chosen" in
+            "{{ $.Args.Force }}" | "{{ $.Args.Overwrite }}")
+                opts="{{ $.Args.DryRun }}"
+              ;;
+            "{{ $.Args.DryRun }}")
+                opts="{{ $.Args.Force }} {{ $.Args.Overwrite }}"
+              ;;
+          esac
+        fi
+      fi
+    fi
   fi
   if [ -n "$opts" ]; then
     # shellcheck disable=SC2207
