@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -28,7 +30,7 @@ var (
 
 type (
 	variables struct {
-		System struct {
+		Dotfiles struct {
 			OS   string
 			Arch string
 		}
@@ -56,6 +58,11 @@ type (
 		DryRun    bool
 		Verbose   bool
 		Writer    io.Writer
+	}
+	templating struct {
+		re     *regexp.Regexp
+		fields []string
+		object any
 	}
 )
 
@@ -92,7 +99,7 @@ func (v variables) get(envKey string) string {
 func (v variables) list() ([]dotfile, error) {
 	found := make(map[string]dotfile)
 	var keys []string
-	for _, opt := range []string{v.System.OS, v.System.Arch, fmt.Sprintf("%s.%s", v.System.OS, v.System.Arch)} {
+	for _, opt := range []string{v.Dotfiles.OS, v.Dotfiles.Arch, fmt.Sprintf("%s.%s", v.Dotfiles.OS, v.Dotfiles.Arch)} {
 		path := filepath.Join(v.root, opt)
 		if !paths.Exists(path) {
 			continue
@@ -151,12 +158,21 @@ func (v variables) forEach(fxn func(string, []byte, dotfile) error) error {
 	if err != nil {
 		return err
 	}
+	r, err := regexp.Compile(`{{(.*?)}}`)
+	if err != nil {
+		return err
+	}
+	t := templating{re: r, object: v}
+	fields := reflect.ValueOf(v.Dotfiles)
+	for i := 0; i < fields.NumField(); i++ {
+		t.fields = append(t.fields, fmt.Sprintf("$.Dotfiles.%s", fields.Type().Field(i).Name))
+	}
 	var results []chan result
 	for _, item := range list {
 		r := make(chan result)
 		go func(object dotfile, c chan result) {
 			to := filepath.Join(v.home, object.offset)
-			processFile(object, to, v, c, fxn)
+			processFile(object, to, t, c, fxn)
 		}(item, r)
 		results = append(results, r)
 	}
@@ -169,7 +185,46 @@ func (v variables) forEach(fxn func(string, []byte, dotfile) error) error {
 	return nil
 }
 
-func processFile(item dotfile, to string, v any, c chan result, fxn func(string, []byte, dotfile) error) {
+func doTemplate(in string, v any) ([]byte, error) {
+	t, err := template.New("t").Parse(in)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func isTemplated(s string, t templating) (bool, error) {
+	if s == "" {
+		return false, nil
+	}
+
+	matches := t.re.FindAllStringSubmatch(s, -1)
+	m := len(matches)
+	if m == 0 {
+		return false, nil
+	}
+	count := 0
+	for _, v := range matches {
+		val := strings.TrimSpace(v[1])
+		if !slices.Contains(t.fields, val) {
+			continue
+		}
+		count++
+	}
+	if count > 0 {
+		if count != m {
+			return false, errors.New("can not mix dotfiles and non-dotfiles templating")
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func processFile(item dotfile, to string, t templating, c chan result, fxn func(string, []byte, dotfile) error) {
 	r := &result{file: item}
 	b, err := os.ReadFile(item.path)
 	if err != nil {
@@ -177,18 +232,18 @@ func processFile(item dotfile, to string, v any, c chan result, fxn func(string,
 		return
 	}
 	s := string(b)
-	if strings.Contains(s, "}}") && strings.Contains(s, "{{ $.System.") {
-		t, err := template.New("t").Parse(string(b))
+	is, err := isTemplated(s, t)
+	if err != nil {
+		c <- r.errored(err)
+		return
+	}
+	if is {
+		t, err := doTemplate(s, t.object)
 		if err != nil {
 			c <- r.errored(err)
 			return
 		}
-		var buf bytes.Buffer
-		if err := t.Execute(&buf, v); err != nil {
-			c <- r.errored(err)
-			return
-		}
-		b = buf.Bytes()
+		b = t
 	}
 	if err := fxn(to, b, item); err != nil {
 		c <- r.errored(err)
@@ -336,8 +391,8 @@ func Do(s Settings) error {
 		return errors.New("writer is nil")
 	}
 	vars := variables{}
-	vars.System.OS = runtime.GOOS
-	vars.System.Arch = runtime.GOARCH
+	vars.Dotfiles.OS = runtime.GOOS
+	vars.Dotfiles.Arch = runtime.GOARCH
 	vars.root = vars.get("ROOT")
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
