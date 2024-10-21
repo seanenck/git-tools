@@ -39,6 +39,7 @@ type (
 	dotfile struct {
 		offset string
 		path   string
+		info   fs.FileInfo
 	}
 	result struct {
 		err  error
@@ -95,7 +96,7 @@ func (v variables) list() ([]dotfile, error) {
 					}
 					if _, ok := found[item]; !ok {
 						offset := strings.TrimPrefix(p, v.root)
-						found[p] = dotfile{path: p, offset: offset}
+						found[p] = dotfile{path: p, offset: offset, info: info}
 						keys = append(keys, p)
 					}
 					return nil
@@ -171,7 +172,7 @@ func processFile(item dotfile, to string, v any, c chan result, fxn func(string,
 	c <- *r
 }
 
-func diffing(vars variables, verbose bool) error {
+func diffing(vars variables, verbose bool) (bool, error) {
 	type diffResult struct {
 		item dotfile
 		res  []byte
@@ -199,42 +200,77 @@ func diffing(vars variables, verbose bool) error {
 	slices.SortFunc(results, func(x, y diffResult) int {
 		return strings.Compare(x.item.offset, y.item.offset)
 	})
+	differences := false
 	for _, item := range results {
+		differences = true
 		fmt.Printf("-> %s\n", item.item.display())
 		if verbose {
 			fmt.Println(string(item.res))
 		}
 	}
-	return err
+	return differences, err
 }
 
-func deploy(vars variables, dryRun, force bool) error {
-	var results []dotfile
+func deploy(vars variables, dryRun, overwrite, force bool) error {
+	type deployResult struct {
+		item     dotfile
+		exists   bool
+		contents []byte
+	}
+	var results []deployResult
 	err := vars.forEach(func(to string, contents []byte, file dotfile) error {
-		write := true
-		if !force && PathExists(to) {
-			r, err := vars.different(to, contents, false)
-			if err != nil {
-				return err
+		exists := false
+		if !force {
+			exists = PathExists(to)
+			if exists {
+				r, err := vars.different(to, contents, false)
+				if err != nil {
+					return err
+				}
+				if len(r) == 0 {
+					return nil
+				}
 			}
-			write = len(r) > 0
 		}
-		if write || force {
-			results = append(results, file)
-		}
-		if dryRun {
-			return nil
-		}
+		results = append(results, deployResult{item: file, exists: exists, contents: contents})
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	slices.SortFunc(results, func(x, y dotfile) int {
-		return strings.Compare(x.offset, y.offset)
+	slices.SortFunc(results, func(x, y deployResult) int {
+		return strings.Compare(x.item.offset, y.item.offset)
 	})
 	for _, item := range results {
-		fmt.Printf("-> %s\n", item.display())
+		status := "adding"
+		if item.exists {
+			status = "differs"
+		}
+		if force {
+			status = ""
+		} else {
+			status = fmt.Sprintf(" (%s)", status)
+		}
+		fmt.Printf("-> %s%s\n", item.item.display(), status)
+		if !force {
+			if dryRun {
+				continue
+			}
+			if item.exists && !overwrite {
+				fmt.Println("    ^ skipped")
+				continue
+			}
+		}
+		h := filepath.Join(vars.home, item.item.offset)
+		dir := filepath.Dir(h)
+		if !PathExists(dir) {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return err
+			}
+		}
+		if err := os.WriteFile(h, item.contents, item.item.info.Mode()); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -302,9 +338,10 @@ func run() error {
 		Deploy string
 		Diff   string
 		Args   struct {
-			Verbose string
-			DryRun  string
-			Force   string
+			Verbose   string
+			DryRun    string
+			Force     string
+			Overwrite string
 		}
 	}{}
 	arguments.Deploy = "deploy"
@@ -312,7 +349,9 @@ func run() error {
 	arguments.Args.DryRun = "--dry-run"
 	arguments.Args.Force = "--force"
 	arguments.Args.Verbose = "--verbose"
+	arguments.Args.Overwrite = "--overwrite"
 
+	count := len(args)
 	switch args[1] {
 	case "completions":
 		t, err := template.New("c").Parse(bashShell)
@@ -322,28 +361,42 @@ func run() error {
 		return t.Execute(os.Stdout, arguments)
 	case arguments.Diff:
 		verbose := false
-		if len(args) == 3 {
-			if strings.ToLower(args[2]) == arguments.Args.Verbose {
-				verbose = true
-			} else {
-				return errors.New("unknown argument for diff")
+		if count <= 3 {
+			if count == 3 {
+				if strings.ToLower(args[2]) == arguments.Args.Verbose {
+					verbose = true
+				} else {
+					return errors.New("unknown argument for diff")
+				}
 			}
+			had, err := diffing(vars, verbose)
+			if err != nil {
+				return err
+			}
+			if had {
+				os.Exit(1)
+			}
+			return nil
 		}
-		return diffing(vars, verbose)
 	case arguments.Deploy:
 		dryRun := false
 		force := false
-		if len(args) == 3 {
-			switch strings.ToLower(args[2]) {
-			case arguments.Args.DryRun:
-				dryRun = true
-			case arguments.Args.Force:
-				force = true
-			default:
-				return errors.New("unknown argument for deploy")
+		overwrite := false
+		if count <= 3 {
+			if count == 3 {
+				switch strings.ToLower(args[2]) {
+				case arguments.Args.DryRun:
+					dryRun = true
+				case arguments.Args.Force:
+					force = true
+				case arguments.Args.Overwrite:
+					overwrite = true
+				default:
+					return errors.New("unknown argument for deploy")
+				}
 			}
+			return deploy(vars, dryRun, overwrite, force)
 		}
-		return deploy(vars, dryRun, force)
 	}
-	return nil
+	return errors.New("invalid arguments")
 }
