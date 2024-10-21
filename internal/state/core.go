@@ -1,3 +1,4 @@
+// Package state handles repository state
 package state
 
 import (
@@ -10,6 +11,7 @@ import (
 	"strings"
 )
 
+// DefaultBranches are the default branches to consider as 'default' (not specifically checked out)
 var DefaultBranches = []string{"main", "master"}
 
 type (
@@ -19,7 +21,8 @@ type (
 		err error
 		dir gitPath
 	}
-	gitPath  string
+	gitPath string
+	// Settings are the state settings to operate on
 	Settings struct {
 		Quick    bool
 		Branches []string
@@ -53,6 +56,7 @@ func gitCommand(sub string, p gitPath, filter []string, args ...string) gitStatu
 	return resulting
 }
 
+// Current will write state for the inputs
 func Current(settings Settings) error {
 	if settings.Writer == nil {
 		return errors.New("writer is unset")

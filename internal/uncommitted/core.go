@@ -18,6 +18,7 @@ import (
 	"mvdan.cc/sh/v3/shell"
 )
 
+// Settings are the operating settings for this mode
 type Settings struct {
 	Mode   string
 	Writer io.Writer
@@ -44,6 +45,7 @@ func uncommit(stdout chan string, dir string) {
 	stdout <- ""
 }
 
+// Current will get uncommitted state information
 func Current(s Settings) error {
 	if s.Writer == nil {
 		return errors.New("writer is nil")
@@ -112,7 +114,7 @@ func Current(s Settings) error {
 		res := <-a
 		if res != "" {
 			for _, line := range strings.Split(res, "\n") {
-				results = append(results, fmt.Sprintf("%s", strings.Replace(line, home, "~", 1)))
+				results = append(results, strings.Replace(line, home, "~", 1))
 			}
 		}
 	}
