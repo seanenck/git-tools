@@ -2,9 +2,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/seanenck/git-tools/internal/cli"
 	"github.com/seanenck/git-tools/internal/paths"
+	"github.com/seanenck/git-tools/internal/state"
 	"mvdan.cc/sh/v3/shell"
 )
 
@@ -21,13 +24,19 @@ func main() {
 	cli.Fatal(gitUncommitted())
 }
 
+func stateSettings(dir string, quick bool, w io.Writer) state.Settings {
+	return state.Settings{
+		Branches: state.DefaultBranches,
+		Writer:   w,
+		Dir:      dir,
+		Quick:    quick,
+	}
+}
+
 func uncommit(stdout chan string, dir string) {
-	cmd := exec.Command("git", "current-state")
-	cmd.Dir = dir
-	cmd.Stderr = os.Stderr
-	out, err := cmd.Output()
-	if err == nil {
-		res := strings.TrimSpace(string(out))
+	var buf bytes.Buffer
+	if err := state.Current(stateSettings(dir, false, &buf)); err == nil {
+		res := strings.TrimSpace(buf.String())
 		if res != "" {
 			stdout <- res
 			return
@@ -45,12 +54,10 @@ func gitUncommitted() error {
 		if err != nil {
 			return err
 		}
-		state, _ := exec.Command("git", "-C", wd, "rev-parse", "--is-inside-work-tree").Output()
-		if strings.TrimSpace(string(state)) == "true" {
-			cmd := exec.Command("git", "current-state", "--quick")
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			return cmd.Run()
+		valid, _ := exec.Command("git", "-C", wd, "rev-parse", "--is-inside-work-tree").Output()
+		if strings.TrimSpace(string(valid)) == "true" {
+			set := stateSettings(wd, true, os.Stdout)
+			return state.Current(set)
 		}
 		return nil
 	}
