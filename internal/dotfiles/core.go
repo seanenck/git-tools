@@ -359,6 +359,16 @@ func deploy(vars variables, s Settings) error {
 }
 
 func (v variables) different(file string, b []byte, verbose bool) ([]byte, error) {
+	if !verbose {
+		read, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		if slices.Compare(read, b) == 0 {
+			return nil, nil
+		}
+		return simpleDiff, nil
+	}
 	f, err := os.CreateTemp("", "dotfiles.")
 	if err != nil {
 		return nil, err
@@ -368,20 +378,14 @@ func (v variables) different(file string, b []byte, verbose bool) ([]byte, error
 	if _, err := f.Write(b); err != nil {
 		return nil, err
 	}
-	return v.doDiff(file, f.Name(), verbose), nil
+	return v.doDiff(file, f.Name()), nil
 }
 
-func (v variables) doDiff(left, right string, verbose bool) []byte {
+func (v variables) doDiff(left, right string) []byte {
 	args := v.diff.args
 	args = append(args, left, right)
 	cmd := exec.Command(v.diff.exe, args...)
 	b, _ := cmd.CombinedOutput()
-	if !verbose {
-		if len(b) == 0 {
-			return nil
-		}
-		return simpleDiff
-	}
 	return b
 }
 
