@@ -375,13 +375,13 @@ func (v variables) doDiff(left, right string, verbose bool) []byte {
 	args := v.diff.args
 	args = append(args, left, right)
 	cmd := exec.Command(v.diff.exe, args...)
-	if !verbose {
-		if err := cmd.Run(); err != nil {
-			return simpleDiff
-		}
-		return nil
-	}
 	b, _ := cmd.CombinedOutput()
+	if !verbose {
+		if len(b) == 0 {
+			return nil
+		}
+		return simpleDiff
+	}
 	return b
 }
 
