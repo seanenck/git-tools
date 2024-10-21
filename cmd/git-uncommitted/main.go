@@ -12,11 +12,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/seanenck/git-tools/internal/cli"
+	"github.com/seanenck/git-tools/internal/paths"
 	"mvdan.cc/sh/v3/shell"
 )
 
 func main() {
-	Fatal(gitUncommitted())
+	cli.Fatal(gitUncommitted())
 }
 
 func uncommit(stdout chan string, dir string) {
@@ -83,7 +85,7 @@ func gitUncommitted() error {
 			}
 			for _, child := range children {
 				childPath := filepath.Join(path, child.Name())
-				if !PathExists(filepath.Join(childPath, ".git")) {
+				if !paths.Exists(filepath.Join(childPath, ".git")) {
 					continue
 				}
 				r := make(chan string)
@@ -97,9 +99,9 @@ func gitUncommitted() error {
 	wg.Wait()
 	var results []string
 	prefix := ""
-	isMessage := op == IsMessageOfTheDay
+	isMessage := op == cli.IsMessageOfTheDay
 	if isMessage {
-		prefix = MessageOfTheDayPrefix
+		prefix = cli.MessageOfTheDayPrefix
 	}
 	for _, a := range all {
 		res := <-a

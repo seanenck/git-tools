@@ -14,6 +14,8 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/seanenck/git-tools/internal/cli"
+	"github.com/seanenck/git-tools/internal/paths"
 	"mvdan.cc/sh/v3/shell"
 )
 
@@ -65,7 +67,7 @@ func (v variables) list() ([]dotfile, error) {
 	var keys []string
 	for _, opt := range []string{v.System.OS, v.System.Arch, fmt.Sprintf("%s.%s", v.System.OS, v.System.Arch)} {
 		path := filepath.Join(v.root, opt)
-		if !PathExists(path) {
+		if !paths.Exists(path) {
 			continue
 		}
 		b, err := os.ReadFile(path)
@@ -118,7 +120,7 @@ func (v variables) list() ([]dotfile, error) {
 }
 
 func main() {
-	Fatal(run())
+	cli.Fatal(run())
 }
 
 func (v variables) forEach(fxn func(string, []byte, dotfile) error) error {
@@ -180,7 +182,7 @@ func diffing(vars variables, prefix string, verbose bool) (bool, error) {
 	var results []diffResult
 	err := vars.forEach(func(to string, contents []byte, file dotfile) error {
 		res := diffResult{item: file}
-		if PathExists(to) {
+		if paths.Exists(to) {
 			r, err := vars.different(to, contents, verbose)
 			if err != nil {
 				return err
@@ -221,7 +223,7 @@ func deploy(vars variables, dryRun, overwrite, force bool) error {
 	err := vars.forEach(func(to string, contents []byte, file dotfile) error {
 		exists := false
 		if !force {
-			exists = PathExists(to)
+			exists = paths.Exists(to)
 			if exists {
 				r, err := vars.different(to, contents, false)
 				if err != nil {
@@ -263,7 +265,7 @@ func deploy(vars variables, dryRun, overwrite, force bool) error {
 		}
 		h := filepath.Join(vars.home, item.item.offset)
 		dir := filepath.Dir(h)
-		if !PathExists(dir) {
+		if !paths.Exists(dir) {
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return err
 			}
@@ -362,8 +364,8 @@ func run() error {
 
 	count := len(args)
 	switch args[1] {
-	case IsMessageOfTheDay:
-		_, err := diffing(vars, MessageOfTheDayPrefix, false)
+	case cli.IsMessageOfTheDay:
+		_, err := diffing(vars, cli.MessageOfTheDayPrefix, false)
 		return err
 	case "completions":
 		t, err := template.New("c").Parse(bashShell)

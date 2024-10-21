@@ -1,8 +1,6 @@
-// Package main has utilities
-package main
+package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
 )
@@ -21,12 +19,4 @@ func Fatal(err error) {
 	}
 	fmt.Fprintf(os.Stderr, "error: %v\n", err)
 	os.Exit(1)
-}
-
-// PathExists indicate if a path exists
-func PathExists(file string) bool {
-	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-	return true
 }

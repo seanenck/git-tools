@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+
+	"github.com/seanenck/git-tools/internal/cli"
 )
 
 type (
@@ -22,7 +24,7 @@ type (
 )
 
 func main() {
-	Fatal(gitCurrentState())
+	cli.Fatal(gitCurrentState())
 }
 
 func (r gitStatus) write() {
