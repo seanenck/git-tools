@@ -13,14 +13,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/seanenck/git-tools/internal/cli"
 	"github.com/seanenck/git-tools/internal/paths"
 	"github.com/seanenck/git-tools/internal/state"
 	"mvdan.cc/sh/v3/shell"
 )
 
 type Settings struct {
-	Mode string
+	Mode   string
+	Writer io.Writer
 }
 
 func stateSettings(dir string, quick bool, w io.Writer) state.Settings {
@@ -45,18 +45,24 @@ func uncommit(stdout chan string, dir string) {
 }
 
 func Current(s Settings) error {
-	op := s.Mode
-	if op == "pwd" {
+	if s.Writer == nil {
+		return errors.New("writer is nil")
+	}
+	switch s.Mode {
+	case "pwd":
 		wd, err := os.Getwd()
 		if err != nil {
 			return err
 		}
 		valid, _ := exec.Command("git", "-C", wd, "rev-parse", "--is-inside-work-tree").Output()
 		if strings.TrimSpace(string(valid)) == "true" {
-			set := stateSettings(wd, true, os.Stdout)
+			set := stateSettings(wd, true, s.Writer)
 			return state.Current(set)
 		}
 		return nil
+	case "":
+	default:
+		return fmt.Errorf("unknown mode: %s", s.Mode)
 	}
 	const key = "GIT_UNCOMMITTED"
 	in := strings.TrimSpace(os.Getenv(key))
@@ -102,22 +108,17 @@ func Current(s Settings) error {
 	}
 	wg.Wait()
 	var results []string
-	prefix := ""
-	isMessage := op == cli.IsMessageOfTheDay
-	if isMessage {
-		prefix = cli.MessageOfTheDayPrefix
-	}
 	for _, a := range all {
 		res := <-a
 		if res != "" {
 			for _, line := range strings.Split(res, "\n") {
-				results = append(results, fmt.Sprintf("%s%s", prefix, strings.Replace(line, home, "~", 1)))
+				results = append(results, fmt.Sprintf("%s", strings.Replace(line, home, "~", 1)))
 			}
 		}
 	}
 	if len(results) > 0 {
 		sort.Strings(results)
-		fmt.Println(strings.Join(results, "\n"))
+		fmt.Fprintln(s.Writer, strings.Join(results, "\n"))
 	}
 	return nil
 }

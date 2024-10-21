@@ -3,6 +3,7 @@ package main
 
 import (
 	"flag"
+	"os"
 
 	"github.com/seanenck/git-tools/internal/cli"
 	"github.com/seanenck/git-tools/internal/uncommitted"
@@ -15,5 +16,5 @@ func main() {
 func gitUncommitted() error {
 	mode := flag.String("mode", "", "operating mode")
 	flag.Parse()
-	return uncommitted.Current(uncommitted.Settings{Mode: *mode})
+	return uncommitted.Current(uncommitted.Settings{Mode: *mode, Writer: os.Stdout})
 }
