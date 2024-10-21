@@ -1,10 +1,17 @@
-_blap() {
-  local cur opts chosen
+_git_dotfiles() {
+  local cur opts chosen offset
   cur=${COMP_WORDS[COMP_CWORD]}
-  if [ "$COMP_CWORD" -eq 1 ]; then
+  offset=1
+  chosen=${COMP_WORDS[1]}
+  if [ -n "$chosen" ]; then
+    if [ "$chosen" = "dotfiles" ]; then
+      offset=2
+    fi
+  fi
+  if [ "$COMP_CWORD" -eq $offset ]; then
     opts="{{ $.Deploy }} {{ $.Diff }}"
   else
-    chosen=${COMP_WORDS[1]}
+    chosen=${COMP_WORDS[$offset]}
     case "$chosen" in
       "{{ $.Deploy }}")
         opts="{{ $.Args.DryRun }} {{ $.Args.Force }} {{ $.Args.Overwrite }}"
@@ -20,4 +27,4 @@ _blap() {
   fi
 }
 
-complete -F _blap -o bashdefault blap
+complete -F _git_dotfiles -o bashdefault {{ $.Exe }}

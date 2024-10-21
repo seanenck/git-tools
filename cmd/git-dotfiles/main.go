@@ -343,7 +343,13 @@ func run() error {
 			Force     string
 			Overwrite string
 		}
+		Exe string
 	}{}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	arguments.Exe = filepath.Base(exe)
 	arguments.Deploy = "deploy"
 	arguments.Diff = "diff"
 	arguments.Args.DryRun = "--dry-run"
