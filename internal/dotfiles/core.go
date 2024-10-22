@@ -99,7 +99,7 @@ func (v variables) get(envKey string) string {
 func (v variables) list() ([]dotfile, error) {
 	found := make(map[string]dotfile)
 	var keys []string
-	for _, opt := range []string{v.Dotfiles.OS, v.Dotfiles.Arch, fmt.Sprintf("%s.%s", v.Dotfiles.OS, v.Dotfiles.Arch)} {
+	for _, opt := range []string{"world", v.Dotfiles.OS, v.Dotfiles.Arch, fmt.Sprintf("%s.%s", v.Dotfiles.OS, v.Dotfiles.Arch)} {
 		path := filepath.Join(v.root, opt)
 		if !paths.Exists(path) {
 			continue
