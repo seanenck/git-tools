@@ -92,10 +92,12 @@ func run() error {
 	slices.SortFunc(collected, func(a, b result) int {
 		return strings.Compare(a.name, b.name)
 	})
+	had := false
 	for idx, item := range collected {
-		if idx > 0 {
+		if idx > 0 && had {
 			fmt.Println()
 		}
+		had = len(item.res) > 0
 		fmt.Print(string(item.res))
 	}
 	return nil
