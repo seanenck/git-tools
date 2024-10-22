@@ -35,9 +35,10 @@ type (
 			OS   string
 			Arch string
 		}
-		root string
-		home string
-		diff struct {
+		root   string
+		home   string
+		tmpdir string
+		diff   struct {
 			exe  string
 			args []string
 		}
@@ -390,7 +391,7 @@ func (v variables) different(file string, cmp compareTo, verbose bool) ([]byte, 
 		}
 		return simpleDiff, nil
 	}
-	f, err := os.CreateTemp("", "dotfiles.")
+	f, err := os.CreateTemp(v.tmpdir, "dotfiles.")
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +420,7 @@ func Do(s Settings) error {
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
 	}
+	vars.tmpdir = vars.get("TMP")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
