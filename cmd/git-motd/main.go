@@ -28,7 +28,7 @@ func (c *cmd) Write(data []byte) (int, error) {
 		fmt.Fprintln(c.buf, "===")
 		c.written = true
 	}
-	fmt.Fprintln(c.buf, string(data))
+	fmt.Fprint(c.buf, string(data))
 	return len(data), nil
 }
 
@@ -92,7 +92,10 @@ func run() error {
 	slices.SortFunc(collected, func(a, b result) int {
 		return strings.Compare(a.name, b.name)
 	})
-	for _, item := range collected {
+	for idx, item := range collected {
+		if idx > 0 {
+			fmt.Println()
+		}
 		fmt.Print(string(item.res))
 	}
 	return nil
