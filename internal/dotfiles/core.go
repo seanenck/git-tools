@@ -98,10 +98,6 @@ func (r *result) errored(err error) result {
 	return *r
 }
 
-func (v variables) get(envKey string) string {
-	return os.Getenv("GIT_DOTFILES_" + envKey)
-}
-
 func (v variables) list() ([]dotfile, error) {
 	found := make(map[string]dotfile)
 	var keys []string
@@ -191,18 +187,6 @@ func (v variables) forEach(fxn processFunction) error {
 	return nil
 }
 
-func doTemplate(in string, v any) ([]byte, error) {
-	t, err := template.New("t").Parse(in)
-	if err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, v); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
 func isTemplated(s string, t templating) (bool, error) {
 	if s == "" {
 		return false, nil
@@ -244,7 +228,17 @@ func processFile(item dotfile, to string, t templating, c chan result, fxn proce
 		return
 	}
 	if is {
-		t, err := doTemplate(s, t.object)
+		t, err := func(in string, v any) ([]byte, error) {
+			t, err := template.New("t").Parse(in)
+			if err != nil {
+				return nil, err
+			}
+			var buf bytes.Buffer
+			if err := t.Execute(&buf, v); err != nil {
+				return nil, err
+			}
+			return buf.Bytes(), nil
+		}(s, t.object)
 		if err != nil {
 			c <- r.errored(err)
 			return
@@ -416,17 +410,18 @@ func Do(s Settings) error {
 	vars := variables{}
 	vars.Dotfiles.OS = runtime.GOOS
 	vars.Dotfiles.Arch = runtime.GOARCH
-	vars.root = vars.get("ROOT")
+	const envVar = "GIT_DOTFILES_"
+	vars.root = os.Getenv(envVar + "ROOT")
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
 	}
-	vars.tmpdir = vars.get("TMP")
+	vars.tmpdir = os.Getenv(envVar + "TMP")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
 	vars.home = home
-	diff := vars.get("DIFF")
+	diff := os.Getenv(envVar + "DIFF")
 	if diff == "" {
 		diff = "diff -u"
 	}
