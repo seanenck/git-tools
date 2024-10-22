@@ -32,7 +32,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: just clean default
       - name: "compress"
-        run: "zip -r ${{ matrix.goos }}-${{ matrix.goarch }}.zip target/"
+        run: "zip -r git-tools-${{ matrix.goos }}-${{ matrix.goarch }}.zip target/"
       - name: "upload"
         uses: actions/upload-artifact@v4
         with:
@@ -46,4 +46,4 @@ jobs:
       - name: release
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.zip"
+          files: git-tools-*.zip
