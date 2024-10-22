@@ -45,4 +45,5 @@ jobs:
         uses: actions/download-artifact@v2
       - name: release
         uses: softprops/action-gh-release@v2
-        files: "*.zip"
+        with:
+          files: "*.zip"
