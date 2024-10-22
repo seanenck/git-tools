@@ -40,6 +40,7 @@ jobs:
           path: "*.zip"
   release:
     runs-on: ubuntu-latest
+    needs: build
     steps:
       - name: download
         uses: actions/download-artifact@v4
