@@ -32,7 +32,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: just clean default
       - name: "compress"
-        run: "tar czvf git-tools-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz target/"
+        run: "tar czvf git-tools-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C target/ ."
       - name: release
         uses: softprops/action-gh-release@v2
         with:
