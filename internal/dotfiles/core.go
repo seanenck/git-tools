@@ -47,6 +47,10 @@ type (
 		path   string
 		info   fs.FileInfo
 	}
+	compareTo struct {
+		data []byte
+		mode fs.FileMode
+	}
 	result struct {
 		err  error
 		file dotfile
@@ -253,6 +257,10 @@ func processFile(item dotfile, to string, t templating, c chan result, fxn proce
 	c <- *r
 }
 
+func (d dotfile) toCompare(data []byte) compareTo {
+	return compareTo{data: data, mode: d.info.Mode()}
+}
+
 func diffing(vars variables, s Settings) error {
 	type diffResult struct {
 		item dotfile
@@ -262,7 +270,7 @@ func diffing(vars variables, s Settings) error {
 	err := vars.forEach(func(to string, contents []byte, file dotfile) error {
 		res := diffResult{item: file}
 		if paths.Exists(to) {
-			r, err := vars.different(to, contents, s.Verbose, file.info.Mode())
+			r, err := vars.different(to, file.toCompare(contents), s.Verbose)
 			if err != nil {
 				return err
 			}
@@ -302,7 +310,7 @@ func deploy(vars variables, s Settings) error {
 		if !s.Force {
 			exists = paths.Exists(to)
 			if exists {
-				r, err := vars.different(to, contents, false, file.info.Mode())
+				r, err := vars.different(to, file.toCompare(contents), false)
 				if err != nil {
 					return err
 				}
@@ -359,25 +367,25 @@ func deploy(vars variables, s Settings) error {
 	return nil
 }
 
-func (v variables) different(file string, b []byte, verbose bool, mode fs.FileMode) ([]byte, error) {
+func (v variables) different(file string, cmp compareTo, verbose bool) ([]byte, error) {
 	stat, err := os.Stat(file)
 	if err != nil {
 		return nil, err
 	}
 	var diff []byte
 	m := stat.Mode()
-	if m != mode {
+	if m != cmp.mode {
 		if !verbose {
 			return simpleDiff, err
 		}
-		diff = append(diff, []byte(fmt.Sprintf("mode: %#o != %#o", m, mode))...)
+		diff = append(diff, []byte(fmt.Sprintf("mode: %#o != %#o", m, cmp.mode))...)
 	}
 	if !verbose {
 		read, err := os.ReadFile(file)
 		if err != nil {
 			return nil, err
 		}
-		if slices.Compare(read, b) == 0 {
+		if slices.Compare(read, cmp.data) == 0 {
 			return nil, nil
 		}
 		return simpleDiff, nil
@@ -388,7 +396,7 @@ func (v variables) different(file string, b []byte, verbose bool, mode fs.FileMo
 	}
 	defer f.Close()
 	defer os.Remove(f.Name())
-	if _, err := f.Write(b); err != nil {
+	if _, err := f.Write(cmp.data); err != nil {
 		return nil, err
 	}
 	args := v.diff.args
