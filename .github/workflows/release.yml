@@ -37,7 +37,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.goos }}-${{ matrix.goarch }}
-          path: *.zip
+          path: "*.zip"
   release:
     runs-on: ubuntu-latest
     steps:
