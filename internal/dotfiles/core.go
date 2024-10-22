@@ -29,7 +29,8 @@ var (
 )
 
 type (
-	variables struct {
+	processFunction func(string, []byte, dotfile) error
+	variables       struct {
 		Dotfiles struct {
 			OS   string
 			Arch string
@@ -153,7 +154,7 @@ func (v variables) list() ([]dotfile, error) {
 	return results, nil
 }
 
-func (v variables) forEach(fxn func(string, []byte, dotfile) error) error {
+func (v variables) forEach(fxn processFunction) error {
 	list, err := v.list()
 	if err != nil {
 		return err
@@ -224,7 +225,7 @@ func isTemplated(s string, t templating) (bool, error) {
 	return false, nil
 }
 
-func processFile(item dotfile, to string, t templating, c chan result, fxn func(string, []byte, dotfile) error) {
+func processFile(item dotfile, to string, t templating, c chan result, fxn processFunction) {
 	r := &result{file: item}
 	b, err := os.ReadFile(item.path)
 	if err != nil {
@@ -261,7 +262,7 @@ func diffing(vars variables, s Settings) error {
 	err := vars.forEach(func(to string, contents []byte, file dotfile) error {
 		res := diffResult{item: file}
 		if paths.Exists(to) {
-			r, err := vars.different(to, contents, s.Verbose)
+			r, err := vars.different(to, contents, s.Verbose, file.info.Mode())
 			if err != nil {
 				return err
 			}
@@ -301,7 +302,7 @@ func deploy(vars variables, s Settings) error {
 		if !s.Force {
 			exists = paths.Exists(to)
 			if exists {
-				r, err := vars.different(to, contents, false)
+				r, err := vars.different(to, contents, false, file.info.Mode())
 				if err != nil {
 					return err
 				}
@@ -358,7 +359,19 @@ func deploy(vars variables, s Settings) error {
 	return nil
 }
 
-func (v variables) different(file string, b []byte, verbose bool) ([]byte, error) {
+func (v variables) different(file string, b []byte, verbose bool, mode fs.FileMode) ([]byte, error) {
+	stat, err := os.Stat(file)
+	if err != nil {
+		return nil, err
+	}
+	var diff []byte
+	m := stat.Mode()
+	if m != mode {
+		if !verbose {
+			return simpleDiff, err
+		}
+		diff = append(diff, []byte(fmt.Sprintf("mode: %#o != %#o", m, mode))...)
+	}
 	if !verbose {
 		read, err := os.ReadFile(file)
 		if err != nil {
@@ -378,15 +391,12 @@ func (v variables) different(file string, b []byte, verbose bool) ([]byte, error
 	if _, err := f.Write(b); err != nil {
 		return nil, err
 	}
-	return v.doDiff(file, f.Name()), nil
-}
-
-func (v variables) doDiff(left, right string) []byte {
 	args := v.diff.args
-	args = append(args, left, right)
+	args = append(args, file, f.Name())
 	cmd := exec.Command(v.diff.exe, args...)
-	b, _ := cmd.CombinedOutput()
-	return b
+	res, _ := cmd.CombinedOutput()
+	diff = append(diff, res...)
+	return diff, nil
 }
 
 // Do will execute dotfiles activities
