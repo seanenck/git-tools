@@ -1,0 +1,48 @@
+name: release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+      - name: deps
+        run: "sudo apt-get update && sudo apt-get install just"
+      - name: "build"
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: just clean default
+      - name: "compress"
+        run: "zip -r ${{ matrix.goos }}-${{ matrix.goarch }}.zip target/"
+      - name: "upload"
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: *.zip
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: download
+        uses: actions/download-artifact@v2
+      - name: release
+        uses: softprops/action-gh-release@v2
+        files: "*.zip"
