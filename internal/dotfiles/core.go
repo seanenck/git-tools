@@ -384,6 +384,35 @@ func Do(s Settings) error {
 	if s.Writer == nil {
 		return errors.New("writer is nil")
 	}
+	arguments := struct {
+		Deploy string
+		Diff   string
+		Args   struct {
+			Verbose   string
+			DryRun    string
+			Force     string
+			Overwrite string
+		}
+		Exe string
+	}{}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	arguments.Exe = filepath.Base(exe)
+	arguments.Deploy = DeployMode
+	arguments.Diff = DiffMode
+	arguments.Args.Force = fmt.Sprintf("--%s", ForceArg)
+	arguments.Args.DryRun = fmt.Sprintf("--%s", DryRunArg)
+	arguments.Args.Verbose = fmt.Sprintf("--%s", VerboseArg)
+	arguments.Args.Overwrite = fmt.Sprintf("--%s", OverwriteArg)
+	if s.Mode == CompletionsMode {
+		t, err := template.New("c").Parse(bashShell)
+		if err != nil {
+			return err
+		}
+		return t.Execute(os.Stdout, arguments)
+	}
 	vars := variables{}
 	vars.Dotfiles.OS = runtime.GOOS
 	vars.Dotfiles.Arch = runtime.GOARCH
@@ -413,36 +442,8 @@ func Do(s Settings) error {
 	if len(fields) > 1 {
 		vars.diff.args = fields[1:]
 	}
-	arguments := struct {
-		Deploy string
-		Diff   string
-		Args   struct {
-			Verbose   string
-			DryRun    string
-			Force     string
-			Overwrite string
-		}
-		Exe string
-	}{}
-	exe, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	arguments.Exe = filepath.Base(exe)
-	arguments.Deploy = DeployMode
-	arguments.Diff = DiffMode
-	arguments.Args.Force = fmt.Sprintf("--%s", ForceArg)
-	arguments.Args.DryRun = fmt.Sprintf("--%s", DryRunArg)
-	arguments.Args.Verbose = fmt.Sprintf("--%s", VerboseArg)
-	arguments.Args.Overwrite = fmt.Sprintf("--%s", OverwriteArg)
 
 	switch s.Mode {
-	case CompletionsMode:
-		t, err := template.New("c").Parse(bashShell)
-		if err != nil {
-			return err
-		}
-		return t.Execute(os.Stdout, arguments)
 	case arguments.Diff:
 		return diffing(vars, s)
 	case arguments.Deploy:
