@@ -181,37 +181,10 @@ func (v variables) forEach(fxn processFunction) error {
 	for _, item := range results {
 		r := <-item
 		if r.err != nil {
-			return r.err
+			return fmt.Errorf("file: %s, error: %v", r.file.offset, r.err)
 		}
 	}
 	return nil
-}
-
-func isTemplated(s string, t templating) (bool, error) {
-	if s == "" {
-		return false, nil
-	}
-
-	matches := t.re.FindAllStringSubmatch(s, -1)
-	m := len(matches)
-	if m == 0 {
-		return false, nil
-	}
-	count := 0
-	for _, v := range matches {
-		val := strings.TrimSpace(v[1])
-		if !slices.Contains(t.fields, val) {
-			continue
-		}
-		count++
-	}
-	if count > 0 {
-		if count != m {
-			return false, errors.New("can not mix dotfiles and non-dotfiles templating")
-		}
-		return true, nil
-	}
-	return false, nil
 }
 
 func processFile(item dotfile, to string, t templating, c chan result, fxn processFunction) {
@@ -222,10 +195,14 @@ func processFile(item dotfile, to string, t templating, c chan result, fxn proce
 		return
 	}
 	s := string(b)
-	is, err := isTemplated(s, t)
-	if err != nil {
-		c <- r.errored(err)
-		return
+	is := false
+	if s != "" {
+		for _, f := range t.fields {
+			if strings.Contains(s, f) {
+				is = true
+				break
+			}
+		}
 	}
 	if is {
 		t, err := func(in string, v any) ([]byte, error) {
