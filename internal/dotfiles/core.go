@@ -34,6 +34,7 @@ type (
 		Dotfiles struct {
 			OS   string
 			Arch string
+			Host string
 		}
 		root   string
 		home   string
@@ -101,7 +102,11 @@ func (r *result) errored(err error) result {
 func (v variables) list() ([]dotfile, error) {
 	found := make(map[string]dotfile)
 	var keys []string
-	for _, opt := range []string{"world", v.Dotfiles.OS, v.Dotfiles.Arch, fmt.Sprintf("%s.%s", v.Dotfiles.OS, v.Dotfiles.Arch)} {
+	options := []string{"world", v.Dotfiles.OS, v.Dotfiles.Arch, fmt.Sprintf("%s.%s", v.Dotfiles.OS, v.Dotfiles.Arch)}
+	if v.Dotfiles.Host != "" {
+		options = append(options, v.Dotfiles.Host)
+	}
+	for _, opt := range options {
 		path := filepath.Join(v.root, opt)
 		if !paths.Exists(path) {
 			continue
@@ -413,10 +418,11 @@ func Do(s Settings) error {
 		}
 		return t.Execute(os.Stdout, arguments)
 	}
+	const envVar = "GIT_DOTFILES_"
 	vars := variables{}
 	vars.Dotfiles.OS = runtime.GOOS
 	vars.Dotfiles.Arch = runtime.GOARCH
-	const envVar = "GIT_DOTFILES_"
+	vars.Dotfiles.Host = os.Getenv(envVar + "HOST")
 	vars.root = os.Getenv(envVar + "ROOT")
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
