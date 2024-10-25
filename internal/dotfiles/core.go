@@ -32,9 +32,10 @@ type (
 	processFunction func(string, []byte, dotfile) error
 	variables       struct {
 		Dotfiles struct {
-			OS   string
-			Arch string
-			Host string
+			OS       string
+			Arch     string
+			Host     string
+			Category string
 		}
 		root   string
 		home   string
@@ -103,6 +104,9 @@ func (v variables) list() ([]dotfile, error) {
 	found := make(map[string]dotfile)
 	var keys []string
 	options := []string{"world", v.Dotfiles.OS, v.Dotfiles.Arch, fmt.Sprintf("%s.%s", v.Dotfiles.OS, v.Dotfiles.Arch)}
+	if v.Dotfiles.Category != "" {
+		options = append(options, v.Dotfiles.Category)
+	}
 	if v.Dotfiles.Host != "" {
 		options = append(options, v.Dotfiles.Host)
 	}
@@ -436,6 +440,7 @@ func Do(s Settings) error {
 	vars.Dotfiles.OS = runtime.GOOS
 	vars.Dotfiles.Arch = runtime.GOARCH
 	vars.Dotfiles.Host = os.Getenv(envVar + "HOST")
+	vars.Dotfiles.Category = os.Getenv(envVar + "CATEGORY")
 	vars.root = os.Getenv(envVar + "ROOT")
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
