@@ -70,7 +70,6 @@ type (
 	templating struct {
 		re     *regexp.Regexp
 		fields []string
-		object any
 	}
 )
 
@@ -103,62 +102,57 @@ func (r *result) errored(err error) result {
 func (v variables) list() ([]dotfile, error) {
 	found := make(map[string]dotfile)
 	var keys []string
-	options := []string{"world", v.Dotfiles.OS, v.Dotfiles.Arch, fmt.Sprintf("%s.%s", v.Dotfiles.OS, v.Dotfiles.Arch)}
-	if v.Dotfiles.Category != "" {
-		options = append(options, v.Dotfiles.Category)
-	}
-	if v.Dotfiles.Host != "" {
-		options = append(options, v.Dotfiles.Host)
-	}
 	ignores := make(map[string]struct{})
-	for _, opt := range options {
-		path := filepath.Join(v.root, opt)
-		if !paths.Exists(path) {
+	path := filepath.Join(v.root, ".dotfiles")
+	if !paths.Exists(path) {
+		return nil, fmt.Errorf("%s does not exist", path)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	b, err = v.templateText(string(b))
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" {
 			continue
 		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
+		negate := strings.HasPrefix(t, "!")
+		if negate {
+			t = t[1:]
 		}
-		for _, line := range strings.Split(string(b), "\n") {
-			t := strings.TrimSpace(line)
-			if t == "" {
-				continue
+		full := filepath.Join(v.root, t)
+		items := []string{full}
+		if strings.Contains(full, "*") {
+			globs, err := filepath.Glob(full)
+			if err != nil {
+				return nil, err
 			}
-			negate := strings.HasPrefix(t, "!")
-			if negate {
-				t = t[1:]
-			}
-			full := filepath.Join(v.root, t)
-			items := []string{full}
-			if strings.Contains(full, "*") {
-				globs, err := filepath.Glob(full)
+			items = globs
+		}
+		for _, item := range items {
+			err := filepath.Walk(item, func(p string, info fs.FileInfo, err error) error {
 				if err != nil {
-					return nil, err
+					return err
 				}
-				items = globs
-			}
-			for _, item := range items {
-				err := filepath.Walk(item, func(p string, info fs.FileInfo, err error) error {
-					if err != nil {
-						return err
-					}
-					if info.IsDir() {
-						return nil
-					}
-					if negate {
-						ignores[p] = struct{}{}
-					}
-					if _, ok := found[item]; !ok {
-						offset := strings.TrimPrefix(p, v.root)
-						found[p] = dotfile{path: p, offset: offset, info: info}
-						keys = append(keys, p)
-					}
+				if info.IsDir() {
 					return nil
-				})
-				if err != nil {
-					return nil, err
 				}
+				if negate {
+					ignores[p] = struct{}{}
+				}
+				if _, ok := found[item]; !ok {
+					offset := strings.TrimPrefix(p, v.root)
+					found[p] = dotfile{path: p, offset: offset, info: info}
+					keys = append(keys, p)
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -184,7 +178,7 @@ func (v variables) forEach(fxn processFunction) error {
 	if err != nil {
 		return err
 	}
-	t := templating{re: r, object: v}
+	t := templating{re: r}
 	fields := reflect.ValueOf(v.Dotfiles)
 	for i := 0; i < fields.NumField(); i++ {
 		t.fields = append(t.fields, fmt.Sprintf("$.Dotfiles.%s", fields.Type().Field(i).Name))
@@ -194,7 +188,7 @@ func (v variables) forEach(fxn processFunction) error {
 		r := make(chan result)
 		go func(object dotfile, c chan result) {
 			to := filepath.Join(v.home, object.offset)
-			processFile(object, to, t, c, fxn)
+			processFile(object, to, t, c, fxn, v.templateText)
 		}(item, r)
 		results = append(results, r)
 	}
@@ -207,7 +201,19 @@ func (v variables) forEach(fxn processFunction) error {
 	return nil
 }
 
-func processFile(item dotfile, to string, t templating, c chan result, fxn processFunction) {
+func (v variables) templateText(in string) ([]byte, error) {
+	t, err := template.New("t").Parse(in)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func processFile(item dotfile, to string, t templating, c chan result, fxn processFunction, templateFxn func(string) ([]byte, error)) {
 	r := &result{file: item}
 	b, err := os.ReadFile(item.path)
 	if err != nil {
@@ -225,17 +231,7 @@ func processFile(item dotfile, to string, t templating, c chan result, fxn proce
 		}
 	}
 	if is {
-		t, err := func(in string, v any) ([]byte, error) {
-			t, err := template.New("t").Parse(in)
-			if err != nil {
-				return nil, err
-			}
-			var buf bytes.Buffer
-			if err := t.Execute(&buf, v); err != nil {
-				return nil, err
-			}
-			return buf.Bytes(), nil
-		}(s, t.object)
+		t, err := templateFxn(s)
 		if err != nil {
 			c <- r.errored(err)
 			return
