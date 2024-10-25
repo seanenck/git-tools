@@ -373,8 +373,10 @@ func (v variables) different(file string, cmp compareTo, verbose bool) ([]byte, 
 		if err != nil {
 			return nil, err
 		}
-		if slices.Compare(read, cmp.data) == 0 {
-			return nil, nil
+		if len(read) == len(cmp.data) {
+			if slices.Compare(read, cmp.data) == 0 {
+				return nil, nil
+			}
 		}
 		return simpleDiff, nil
 	}
