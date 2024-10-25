@@ -30,13 +30,14 @@ var (
 
 type (
 	processFunction func(string, []byte, dotfile) error
-	variables       struct {
-		Dotfiles struct {
-			OS       string
-			Arch     string
-			Host     string
-			Category string
-		}
+	// Parameters are exported to the templating of all dotfiles
+	Parameters struct {
+		OS       string
+		Arch     string
+		Host     string
+		category []string
+	}
+	variables struct {
 		root   string
 		home   string
 		tmpdir string
@@ -44,6 +45,7 @@ type (
 			exe  string
 			args []string
 		}
+		Dotfiles Parameters
 	}
 	dotfile struct {
 		offset string
@@ -97,6 +99,11 @@ func (d dotfile) display() string {
 func (r *result) errored(err error) result {
 	r.err = err
 	return *r
+}
+
+// Category indicates if the category is set for the parameters
+func (p Parameters) Category(c string) bool {
+	return slices.Contains(p.category, c)
 }
 
 func (v variables) list() ([]dotfile, error) {
@@ -436,7 +443,7 @@ func Do(s Settings) error {
 	vars.Dotfiles.OS = runtime.GOOS
 	vars.Dotfiles.Arch = runtime.GOARCH
 	vars.Dotfiles.Host = os.Getenv(envVar + "HOST")
-	vars.Dotfiles.Category = os.Getenv(envVar + "CATEGORY")
+	vars.Dotfiles.category = strings.Split(os.Getenv(envVar+"CATEGORY"), " ")
 	vars.root = os.Getenv(envVar + "ROOT")
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
