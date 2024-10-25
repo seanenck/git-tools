@@ -106,6 +106,7 @@ func (v variables) list() ([]dotfile, error) {
 	if v.Dotfiles.Host != "" {
 		options = append(options, v.Dotfiles.Host)
 	}
+	ignores := make(map[string]struct{})
 	for _, opt := range options {
 		path := filepath.Join(v.root, opt)
 		if !paths.Exists(path) {
@@ -119,6 +120,10 @@ func (v variables) list() ([]dotfile, error) {
 			t := strings.TrimSpace(line)
 			if t == "" {
 				continue
+			}
+			negate := strings.HasPrefix(t, "!")
+			if negate {
+				t = t[1:]
 			}
 			full := filepath.Join(v.root, t)
 			items := []string{full}
@@ -136,6 +141,9 @@ func (v variables) list() ([]dotfile, error) {
 					}
 					if info.IsDir() {
 						return nil
+					}
+					if negate {
+						ignores[p] = struct{}{}
 					}
 					if _, ok := found[item]; !ok {
 						offset := strings.TrimPrefix(p, v.root)
@@ -155,6 +163,9 @@ func (v variables) list() ([]dotfile, error) {
 	}
 	var results []dotfile
 	for _, k := range keys {
+		if _, ok := ignores[k]; ok {
+			continue
+		}
 		results = append(results, found[k])
 	}
 	return results, nil
