@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/seanenck/git-tools/internal/cli"
 	"github.com/seanenck/git-tools/internal/paths"
 	"github.com/seanenck/git-tools/internal/state"
 	"mvdan.cc/sh/v3/shell"
@@ -76,13 +77,11 @@ func Current(s Settings) error {
 		return err
 	}
 	home := os.Getenv("HOME")
-	if val := strings.ToLower(os.Getenv(key + "_HOME")); val != "" {
-		if val == "yes" || val == "1" || val == "true" {
-			if home == "" {
-				return errors.New("unable to process HOME, not set?")
-			}
-			dirs = append(dirs, filepath.Dir(home))
+	if cli.IsYes(os.Getenv(key + "_HOME")) {
+		if home == "" {
+			return errors.New("unable to process HOME, not set?")
 		}
+		dirs = append(dirs, filepath.Dir(home))
 	}
 
 	var wg sync.WaitGroup

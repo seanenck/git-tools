@@ -18,6 +18,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/seanenck/git-tools/internal/cli"
 	"github.com/seanenck/git-tools/internal/paths"
 	"mvdan.cc/sh/v3/shell"
 )
@@ -45,7 +46,8 @@ type (
 			exe  string
 			args []string
 		}
-		Dotfiles Parameters
+		Dotfiles   Parameters
+		autoDetect bool
 	}
 	dotfile struct {
 		offset string
@@ -165,6 +167,30 @@ func (v variables) list() ([]dotfile, error) {
 	}
 	if len(found) == 0 {
 		return nil, errors.New("no items matched")
+	}
+	if v.autoDetect {
+		b, err := exec.Command("git", "-C", v.root, "ls-files").CombinedOutput()
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			t := strings.TrimSpace(line)
+			if t == "" {
+				continue
+			}
+			home := filepath.Join(v.home, line)
+			if !paths.Exists(home) {
+				continue
+			}
+			full := filepath.Join(v.root, line)
+			if _, ok := ignores[full]; ok {
+				continue
+			}
+			if _, ok := found[full]; ok {
+				continue
+			}
+			return nil, fmt.Errorf("auto-detected git-controlled file that is not properly deployed: %s", line)
+		}
 	}
 	var results []dotfile
 	for _, k := range keys {
@@ -448,6 +474,7 @@ func Do(s Settings) error {
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
 	}
+	vars.autoDetect = cli.IsYes(os.Getenv(envVar + "AUTODETECT"))
 	vars.tmpdir = os.Getenv(envVar + "TMP")
 	home, err := os.UserHomeDir()
 	if err != nil {
