@@ -72,8 +72,8 @@ type (
 		Writer    io.Writer
 	}
 	templating struct {
-		re     *regexp.Regexp
-		fields []string
+		re         *regexp.Regexp
+		parameters []string
 	}
 )
 
@@ -202,6 +202,14 @@ func (v variables) list() ([]dotfile, error) {
 	return results, nil
 }
 
+func getParameters(count int, base []string, fxn func(int) string) []string {
+	var vals []string
+	for i := 0; i < count; i++ {
+		vals = append(vals, fmt.Sprintf("$.Dotfiles.%s", fxn(i)))
+	}
+	return append(base, vals...)
+}
+
 func (v variables) forEach(fxn processFunction) error {
 	list, err := v.list()
 	if err != nil {
@@ -212,10 +220,13 @@ func (v variables) forEach(fxn processFunction) error {
 		return err
 	}
 	t := templating{re: r}
-	fields := reflect.ValueOf(v.Dotfiles)
-	for i := 0; i < fields.NumField(); i++ {
-		t.fields = append(t.fields, fmt.Sprintf("$.Dotfiles.%s", fields.Type().Field(i).Name))
-	}
+	fields := reflect.TypeOf(v.Dotfiles)
+	t.parameters = getParameters(fields.NumField(), t.parameters, func(idx int) string {
+		return fields.Field(idx).Name
+	})
+	t.parameters = getParameters(fields.NumMethod(), t.parameters, func(idx int) string {
+		return fields.Method(idx).Name
+	})
 	var results []chan result
 	for _, item := range list {
 		r := make(chan result)
@@ -256,7 +267,7 @@ func processFile(item dotfile, to string, t templating, c chan result, fxn proce
 	s := string(b)
 	is := false
 	if s != "" {
-		for _, f := range t.fields {
+		for _, f := range t.parameters {
 			if strings.Contains(s, f) {
 				is = true
 				break
