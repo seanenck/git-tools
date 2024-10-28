@@ -112,9 +112,10 @@ func resolvePath(path string) string {
 	return os.Expand(path, os.Getenv)
 }
 
+// Read will read file contents
 func (p Parameters) Read(path string) string {
 	source := resolvePath(path)
-	if !p.Exists(source) {
+	if !p.exists(source) {
 		return ""
 	}
 	b, err := os.ReadFile(source)
@@ -124,8 +125,16 @@ func (p Parameters) Read(path string) string {
 	return strings.TrimSpace(string(b))
 }
 
+// Exists will check if a file exists
 func (p Parameters) Exists(path string) bool {
-	return paths.Exists(resolvePath(path))
+	return p.exists(resolvePath(path))
+}
+
+func (p Parameters) exists(path string) bool {
+	if path == "" {
+		return false
+	}
+	return paths.Exists(path)
 }
 
 func (v variables) list() ([]dotfile, error) {
