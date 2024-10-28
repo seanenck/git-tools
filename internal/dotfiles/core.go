@@ -108,6 +108,26 @@ func (p Parameters) Category(c string) bool {
 	return slices.Contains(p.category, c)
 }
 
+func resolvePath(path string) string {
+	return os.Expand(path, os.Getenv)
+}
+
+func (p Parameters) Read(path string) string {
+	source := resolvePath(path)
+	if !p.Exists(source) {
+		return ""
+	}
+	b, err := os.ReadFile(source)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func (p Parameters) Exists(path string) bool {
+	return paths.Exists(resolvePath(path))
+}
+
 func (v variables) list() ([]dotfile, error) {
 	found := make(map[string]dotfile)
 	var keys []string
