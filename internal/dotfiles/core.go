@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -30,6 +29,7 @@ var (
 )
 
 type (
+	parameters          []string
 	templateString      string
 	templateStringArray []string
 	processFunction     func(string, []byte, dotfile) error
@@ -72,10 +72,6 @@ type (
 		DryRun    bool
 		Verbose   bool
 		Writer    io.Writer
-	}
-	templating struct {
-		re         *regexp.Regexp
-		parameters []string
 	}
 )
 
@@ -251,16 +247,12 @@ func (v variables) forEach(fxn processFunction) error {
 	if err != nil {
 		return err
 	}
-	r, err := regexp.Compile(`{{(.*?)}}`)
-	if err != nil {
-		return err
-	}
-	t := templating{re: r}
+	var params []string
 	fields := reflect.TypeOf(v.Dotfiles)
-	t.parameters = getParameters(fields.NumField(), t.parameters, func(idx int) string {
+	params = getParameters(fields.NumField(), params, func(idx int) string {
 		return fields.Field(idx).Name
 	})
-	t.parameters = getParameters(fields.NumMethod(), t.parameters, func(idx int) string {
+	params = getParameters(fields.NumMethod(), params, func(idx int) string {
 		return fields.Method(idx).Name
 	})
 	var results []chan result
@@ -268,7 +260,7 @@ func (v variables) forEach(fxn processFunction) error {
 		r := make(chan result)
 		go func(object dotfile, c chan result) {
 			to := filepath.Join(v.home, object.offset)
-			processFile(object, to, t, c, fxn, v.templateText)
+			processFile(object, to, params, c, fxn, v.templateText)
 		}(item, r)
 		results = append(results, r)
 	}
@@ -293,7 +285,7 @@ func (v variables) templateText(in string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func processFile(item dotfile, to string, t templating, c chan result, fxn processFunction, templateFxn func(string) ([]byte, error)) {
+func processFile(item dotfile, to string, params parameters, c chan result, fxn processFunction, templateFxn func(string) ([]byte, error)) {
 	r := &result{file: item}
 	b, err := os.ReadFile(item.path)
 	if err != nil {
@@ -303,7 +295,7 @@ func processFile(item dotfile, to string, t templating, c chan result, fxn proce
 	s := string(b)
 	is := false
 	if s != "" {
-		for _, f := range t.parameters {
+		for _, f := range params {
 			if strings.Contains(s, f) {
 				is = true
 				break
