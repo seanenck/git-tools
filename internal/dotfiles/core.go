@@ -115,6 +115,11 @@ func resolvePath(path string) string {
 	return os.Expand(path, os.Getenv)
 }
 
+// Env will read an environment variables
+func (p Parameters) Env(key string) string {
+	return os.Getenv(key)
+}
+
 // Read will read file contents
 func (p Parameters) Read(path string) string {
 	source := resolvePath(path)
