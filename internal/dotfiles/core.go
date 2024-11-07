@@ -30,13 +30,15 @@ var (
 )
 
 type (
-	processFunction func(string, []byte, dotfile) error
+	templateString      string
+	templateStringArray []string
+	processFunction     func(string, []byte, dotfile) error
 	// Parameters are exported to the templating of all dotfiles
 	Parameters struct {
-		OS       string
-		Arch     string
-		Host     string
-		category []string
+		OS       templateString
+		Arch     templateString
+		Host     templateString
+		Category templateStringArray
 	}
 	variables struct {
 		root   string
@@ -94,6 +96,11 @@ const (
 	OverwriteArg = "overwrite"
 )
 
+// Is will return true if the string equals the given value
+func (t templateString) Is(value string) bool {
+	return string(t) == value
+}
+
 func (d dotfile) display() string {
 	return strings.TrimPrefix(d.offset, string(os.PathSeparator))
 }
@@ -103,9 +110,9 @@ func (r *result) errored(err error) result {
 	return *r
 }
 
-// Category indicates if the category is set for the parameters
-func (p Parameters) Category(c string) bool {
-	return slices.Contains(p.category, c)
+// Has returns true if the array has the value
+func (c templateStringArray) Has(value string) bool {
+	return slices.Contains(c, value)
 }
 
 func resolvePath(path string) string {
@@ -506,10 +513,10 @@ func Do(s Settings) error {
 	}
 	const envVar = "GIT_DOTFILES_"
 	vars := variables{}
-	vars.Dotfiles.OS = runtime.GOOS
-	vars.Dotfiles.Arch = runtime.GOARCH
-	vars.Dotfiles.Host = os.Getenv(envVar + "HOST")
-	vars.Dotfiles.category = strings.Split(os.Getenv(envVar+"CATEGORY"), " ")
+	vars.Dotfiles.OS = templateString(runtime.GOOS)
+	vars.Dotfiles.Arch = templateString(runtime.GOARCH)
+	vars.Dotfiles.Host = templateString(os.Getenv(envVar + "HOST"))
+	vars.Dotfiles.Category = strings.Split(os.Getenv(envVar+"CATEGORY"), " ")
 	vars.root = os.Getenv(envVar + "ROOT")
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
