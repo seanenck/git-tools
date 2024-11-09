@@ -166,6 +166,9 @@ func (v variables) list() ([]dotfile, error) {
 		if t == "" {
 			continue
 		}
+		if strings.HasPrefix(t, "#") {
+			continue
+		}
 		negate := strings.HasPrefix(t, "!")
 		if negate {
 			t = t[1:]
