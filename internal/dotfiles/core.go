@@ -241,6 +241,9 @@ func (v variables) list() ([]dotfile, error) {
 		}
 		results = append(results, found[k])
 	}
+	slices.SortFunc(results, func(x, y dotfile) int {
+		return strings.Compare(x.offset, y.offset)
+	})
 	return results, nil
 }
 
