@@ -82,6 +82,8 @@ const (
 	DeployMode = "deploy"
 	// DiffMode indicates showing a diff
 	DiffMode = "diff"
+	// ListMode will list the effective files
+	ListMode = "ls-files"
 	// DryRunArg is the argumnent to outline changes (not make them)
 	DryRunArg = "dry-run"
 	// ForceArg will force write all files
@@ -329,6 +331,19 @@ func (d dotfile) toCompare(data []byte) compareTo {
 	return compareTo{data: data, mode: d.info.Mode()}
 }
 
+func list(vars variables, s Settings) error {
+	d, err := vars.list()
+	if err != nil {
+		return err
+	}
+	for _, file := range d {
+		if _, err := fmt.Fprintf(s.Writer, "%s\n", file.display()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func diffing(vars variables, s Settings) error {
 	type diffResult struct {
 		item dotfile
@@ -483,9 +498,10 @@ func Do(s Settings) error {
 		return errors.New("writer is nil")
 	}
 	arguments := struct {
-		Deploy string
-		Diff   string
-		Args   struct {
+		Deploy  string
+		Diff    string
+		LsFiles string
+		Args    struct {
 			Verbose   string
 			DryRun    string
 			Force     string
@@ -500,6 +516,7 @@ func Do(s Settings) error {
 	arguments.Exe = filepath.Base(exe)
 	arguments.Deploy = DeployMode
 	arguments.Diff = DiffMode
+	arguments.LsFiles = ListMode
 	arguments.Args.Force = fmt.Sprintf("--%s", ForceArg)
 	arguments.Args.DryRun = fmt.Sprintf("--%s", DryRunArg)
 	arguments.Args.Verbose = fmt.Sprintf("--%s", VerboseArg)
@@ -549,6 +566,8 @@ func Do(s Settings) error {
 		return diffing(vars, s)
 	case arguments.Deploy:
 		return deploy(vars, s)
+	case arguments.LsFiles:
+		return list(vars, s)
 	}
 	return errors.New("invalid arguments")
 }

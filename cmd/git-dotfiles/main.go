@@ -36,6 +36,7 @@ func run() error {
 			return err
 		}
 		settings.Verbose = *verbose
+	case dotfiles.ListMode:
 	case dotfiles.DeployMode:
 		overwrite := flagSet.Bool(dotfiles.OverwriteArg, false, "overwrite files on difference")
 		force := flagSet.Bool(dotfiles.ForceArg, false, "overwrite all files")

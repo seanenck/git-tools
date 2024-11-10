@@ -11,7 +11,7 @@ _git_dotfiles() {
   chosen=${COMP_WORDS[$offset]}
   subset=$((offset+1))
   if [ "$COMP_CWORD" -eq $offset ]; then
-    opts="{{ $.Deploy }} {{ $.Diff }}"
+    opts="{{ $.Deploy }} {{ $.Diff }} {{ $.LsFiles }}"
   else
     if [ "$COMP_CWORD" -eq $subset ]; then
       case "$chosen" in
