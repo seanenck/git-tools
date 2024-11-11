@@ -103,11 +103,19 @@ func (v variables) list() ([]dotfile, error) {
 	}
 	script := lua.NewState()
 	defer script.Close()
-	var entries []string
+	entries := make(map[bool][]string)
 	fxn := func(l *lua.LState) int {
 		s := strings.TrimSpace(l.ToString(1))
 		if s != "" {
-			entries = append(entries, s)
+			negate := strings.HasPrefix(s, "!")
+			if negate {
+				s = s[1:]
+			}
+			has, ok := entries[negate]
+			if !ok {
+				has = []string{}
+			}
+			entries[negate] = append(has, s)
 		}
 		return 1
 	}
@@ -124,41 +132,39 @@ func (v variables) list() ([]dotfile, error) {
 	if err := script.DoFile(path); err != nil {
 		return nil, err
 	}
-	for _, line := range entries {
-		t := line
-		negate := strings.HasPrefix(t, "!")
-		if negate {
-			t = t[1:]
-		}
-		full := filepath.Join(v.root, t)
-		items := []string{full}
-		if strings.Contains(full, "*") {
-			globs, err := filepath.Glob(full)
-			if err != nil {
-				return nil, err
-			}
-			items = globs
-		}
-		for _, item := range items {
-			err := filepath.Walk(item, func(p string, info fs.FileInfo, err error) error {
+	for negate, values := range entries {
+		for _, line := range values {
+			t := line
+			full := filepath.Join(v.root, t)
+			items := []string{full}
+			if strings.Contains(full, "*") {
+				globs, err := filepath.Glob(full)
 				if err != nil {
-					return err
+					return nil, err
 				}
-				if info.IsDir() {
+				items = globs
+			}
+			for _, item := range items {
+				err := filepath.Walk(item, func(p string, info fs.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if info.IsDir() {
+						return nil
+					}
+					if negate {
+						ignores[p] = struct{}{}
+					}
+					if _, ok := found[item]; !ok {
+						offset := strings.TrimPrefix(p, v.root)
+						found[p] = dotfile{path: p, offset: offset, info: info}
+						keys = append(keys, p)
+					}
 					return nil
+				})
+				if err != nil {
+					return nil, err
 				}
-				if negate {
-					ignores[p] = struct{}{}
-				}
-				if _, ok := found[item]; !ok {
-					offset := strings.TrimPrefix(p, v.root)
-					found[p] = dotfile{path: p, offset: offset, info: info}
-					keys = append(keys, p)
-				}
-				return nil
-			})
-			if err != nil {
-				return nil, err
 			}
 		}
 	}
