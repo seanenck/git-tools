@@ -105,8 +105,10 @@ func (v variables) list() ([]dotfile, error) {
 	defer script.Close()
 	var entries []string
 	fxn := func(l *lua.LState) int {
-		s := l.ToString(1)
-		entries = append(entries, s)
+		s := strings.TrimSpace(l.ToString(1))
+		if s != "" {
+			entries = append(entries, s)
+		}
 		return 1
 	}
 	exists := func(l *lua.LState) int {
