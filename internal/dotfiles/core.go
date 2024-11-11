@@ -2,7 +2,6 @@
 package dotfiles
 
 import (
-	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -19,6 +17,7 @@ import (
 
 	"github.com/seanenck/git-tools/internal/cli"
 	"github.com/seanenck/git-tools/internal/paths"
+	"github.com/yuin/gopher-lua"
 	"mvdan.cc/sh/v3/shell"
 )
 
@@ -29,18 +28,8 @@ var (
 )
 
 type (
-	parameters          []string
-	templateString      string
-	templateStringArray []string
-	processFunction     func(string, []byte, dotfile) error
-	// Parameters are exported to the templating of all dotfiles
-	Parameters struct {
-		OS       templateString
-		Arch     templateString
-		Host     templateString
-		Category templateStringArray
-	}
-	variables struct {
+	processFunction func(string, []byte, dotfile) error
+	variables       struct {
 		root   string
 		home   string
 		tmpdir string
@@ -48,7 +37,6 @@ type (
 			exe  string
 			args []string
 		}
-		Dotfiles   Parameters
 		autoDetect bool
 	}
 	dotfile struct {
@@ -94,11 +82,6 @@ const (
 	OverwriteArg = "overwrite"
 )
 
-// Is will return true if the string equals the given value
-func (t templateString) Is(value string) bool {
-	return string(t) == value
-}
-
 func (d dotfile) display() string {
 	return strings.TrimPrefix(d.offset, string(os.PathSeparator))
 }
@@ -108,69 +91,39 @@ func (r *result) errored(err error) result {
 	return *r
 }
 
-// Has returns true if the array has the value
-func (c templateStringArray) Has(value string) bool {
-	return slices.Contains(c, value)
-}
-
-func resolvePath(path string) string {
-	return os.Expand(path, os.Getenv)
-}
-
-// Env will read an environment variables
-func (p Parameters) Env(key string) string {
-	return os.Getenv(key)
-}
-
-// Read will read file contents
-func (p Parameters) Read(path string) string {
-	source := resolvePath(path)
-	if !p.exists(source) {
-		return ""
-	}
-	b, err := os.ReadFile(source)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-
-// Exists will check if a file exists
-func (p Parameters) Exists(path string) bool {
-	return p.exists(resolvePath(path))
-}
-
-func (p Parameters) exists(path string) bool {
-	if path == "" {
-		return false
-	}
-	return paths.Exists(path)
-}
-
 func (v variables) list() ([]dotfile, error) {
+	os.Setenv("GOOS", runtime.GOOS)
+	os.Setenv("GOARCH", runtime.GOARCH)
 	found := make(map[string]dotfile)
 	var keys []string
 	ignores := make(map[string]struct{})
-	path := filepath.Join(v.root, ".dotfiles")
+	path := filepath.Join(v.root, "dotfiles.lua")
 	if !paths.Exists(path) {
 		return nil, fmt.Errorf("%s does not exist", path)
 	}
-	b, err := os.ReadFile(path)
-	if err != nil {
+	script := lua.NewState()
+	defer script.Close()
+	var entries []string
+	fxn := func(l *lua.LState) int {
+		s := l.ToString(1)
+		entries = append(entries, s)
+		return 1
+	}
+	exists := func(l *lua.LState) int {
+		s := l.ToString(1)
+		s = os.Expand(s, os.Getenv)
+		if paths.Exists(s) {
+			return 1
+		}
+		return 0
+	}
+	script.SetGlobal("register", script.NewFunction(fxn))
+	script.SetGlobal("exists", script.NewFunction(exists))
+	if err := script.DoFile(path); err != nil {
 		return nil, err
 	}
-	b, err = v.templateText(string(b))
-	if err != nil {
-		return nil, err
-	}
-	for _, line := range strings.Split(string(b), "\n") {
-		t := strings.TrimSpace(line)
-		if t == "" {
-			continue
-		}
-		if strings.HasPrefix(t, "#") {
-			continue
-		}
+	for _, line := range entries {
+		t := line
 		negate := strings.HasPrefix(t, "!")
 		if negate {
 			t = t[1:]
@@ -247,33 +200,17 @@ func (v variables) list() ([]dotfile, error) {
 	return results, nil
 }
 
-func getParameters(count int, base []string, fxn func(int) string) []string {
-	var vals []string
-	for i := 0; i < count; i++ {
-		vals = append(vals, fmt.Sprintf("$.Dotfiles.%s", fxn(i)))
-	}
-	return append(base, vals...)
-}
-
 func (v variables) forEach(fxn processFunction) error {
 	list, err := v.list()
 	if err != nil {
 		return err
 	}
-	var params []string
-	fields := reflect.TypeOf(v.Dotfiles)
-	params = getParameters(fields.NumField(), params, func(idx int) string {
-		return fields.Field(idx).Name
-	})
-	params = getParameters(fields.NumMethod(), params, func(idx int) string {
-		return fields.Method(idx).Name
-	})
 	var results []chan result
 	for _, item := range list {
 		r := make(chan result)
 		go func(object dotfile, c chan result) {
 			to := filepath.Join(v.home, object.offset)
-			processFile(object, to, params, c, fxn, v.templateText)
+			processFile(object, to, c, fxn)
 		}(item, r)
 		results = append(results, r)
 	}
@@ -286,42 +223,12 @@ func (v variables) forEach(fxn processFunction) error {
 	return nil
 }
 
-func (v variables) templateText(in string) ([]byte, error) {
-	t, err := template.New("t").Parse(in)
-	if err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, v); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func processFile(item dotfile, to string, params parameters, c chan result, fxn processFunction, templateFxn func(string) ([]byte, error)) {
+func processFile(item dotfile, to string, c chan result, fxn processFunction) {
 	r := &result{file: item}
 	b, err := os.ReadFile(item.path)
 	if err != nil {
 		c <- r.errored(err)
 		return
-	}
-	s := string(b)
-	is := false
-	if s != "" {
-		for _, f := range params {
-			if strings.Contains(s, f) {
-				is = true
-				break
-			}
-		}
-	}
-	if is {
-		t, err := templateFxn(s)
-		if err != nil {
-			c <- r.errored(err)
-			return
-		}
-		b = t
 	}
 	if err := fxn(to, b, item); err != nil {
 		c <- r.errored(err)
@@ -533,10 +440,6 @@ func Do(s Settings) error {
 	}
 	const envVar = "GIT_DOTFILES_"
 	vars := variables{}
-	vars.Dotfiles.OS = templateString(runtime.GOOS)
-	vars.Dotfiles.Arch = templateString(runtime.GOARCH)
-	vars.Dotfiles.Host = templateString(os.Getenv(envVar + "HOST"))
-	vars.Dotfiles.Category = strings.Split(os.Getenv(envVar+"CATEGORY"), " ")
 	vars.root = os.Getenv(envVar + "ROOT")
 	if vars.root == "" {
 		return errors.New("dotfiles root not set")
