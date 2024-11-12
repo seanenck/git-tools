@@ -103,7 +103,7 @@ func (v variables) list() ([]dotfile, error) {
 	}
 	script := lua.NewState()
 	defer script.Close()
-	entries := make(map[bool][]string)
+	var lErr []error
 	fxn := func(l *lua.LState) int {
 		s := strings.TrimSpace(l.ToString(1))
 		if s != "" {
@@ -111,36 +111,13 @@ func (v variables) list() ([]dotfile, error) {
 			if negate {
 				s = s[1:]
 			}
-			has, ok := entries[negate]
-			if !ok {
-				has = []string{}
-			}
-			entries[negate] = append(has, s)
-		}
-		return 1
-	}
-	exists := func(l *lua.LState) int {
-		s := l.ToString(1)
-		s = os.Expand(s, os.Getenv)
-		if paths.Exists(s) {
-			return 1
-		}
-		return 0
-	}
-	script.SetGlobal("register", script.NewFunction(fxn))
-	script.SetGlobal("exists", script.NewFunction(exists))
-	if err := script.DoFile(path); err != nil {
-		return nil, err
-	}
-	for negate, values := range entries {
-		for _, line := range values {
-			t := line
-			full := filepath.Join(v.root, t)
+			full := filepath.Join(v.root, s)
 			items := []string{full}
 			if strings.Contains(full, "*") {
 				globs, err := filepath.Glob(full)
 				if err != nil {
-					return nil, err
+					lErr = append(lErr, err)
+					return 0
 				}
 				items = globs
 			}
@@ -163,10 +140,28 @@ func (v variables) list() ([]dotfile, error) {
 					return nil
 				})
 				if err != nil {
-					return nil, err
+					lErr = append(lErr, err)
+					return 0
 				}
 			}
 		}
+		return 1
+	}
+	exists := func(l *lua.LState) int {
+		s := l.ToString(1)
+		s = os.Expand(s, os.Getenv)
+		if paths.Exists(s) {
+			return 1
+		}
+		return 0
+	}
+	script.SetGlobal("register", script.NewFunction(fxn))
+	script.SetGlobal("exists", script.NewFunction(exists))
+	if err := script.DoFile(path); err != nil {
+		return nil, err
+	}
+	if len(lErr) > 0 {
+		return nil, errors.Join(lErr...)
 	}
 	if len(found) == 0 {
 		return nil, errors.New("no items matched")
