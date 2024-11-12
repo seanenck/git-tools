@@ -105,45 +105,47 @@ func (v variables) list() ([]dotfile, error) {
 	defer script.Close()
 	var lErr []error
 	fxn := func(l *lua.LState) int {
-		s := strings.TrimSpace(l.ToString(1))
-		if s != "" {
-			negate := strings.HasPrefix(s, "!")
-			if negate {
-				s = s[1:]
-			}
-			full := filepath.Join(v.root, s)
-			items := []string{full}
-			if strings.Contains(full, "*") {
-				globs, err := filepath.Glob(full)
-				if err != nil {
-					lErr = append(lErr, err)
-					return 0
+		val := strings.TrimSpace(l.ToString(1))
+		if val != "" {
+			func(path string) {
+				negate := strings.HasPrefix(path, "!")
+				if negate {
+					path = path[1:]
 				}
-				items = globs
-			}
-			for _, item := range items {
-				err := filepath.Walk(item, func(p string, info fs.FileInfo, err error) error {
+				full := filepath.Join(v.root, path)
+				items := []string{full}
+				if strings.Contains(full, "*") {
+					globs, err := filepath.Glob(full)
 					if err != nil {
-						return err
+						lErr = append(lErr, err)
+						return
 					}
-					if info.IsDir() {
-						return nil
-					}
-					if negate {
-						ignores[p] = struct{}{}
-					}
-					if _, ok := found[item]; !ok {
-						offset := strings.TrimPrefix(p, v.root)
-						found[p] = dotfile{path: p, offset: offset, info: info}
-						keys = append(keys, p)
-					}
-					return nil
-				})
-				if err != nil {
-					lErr = append(lErr, err)
-					return 0
+					items = globs
 				}
-			}
+				for _, item := range items {
+					err := filepath.Walk(item, func(p string, info fs.FileInfo, err error) error {
+						if err != nil {
+							return err
+						}
+						if info.IsDir() {
+							return nil
+						}
+						if negate {
+							ignores[p] = struct{}{}
+						}
+						if _, ok := found[item]; !ok {
+							offset := strings.TrimPrefix(p, v.root)
+							found[p] = dotfile{path: p, offset: offset, info: info}
+							keys = append(keys, p)
+						}
+						return nil
+					})
+					if err != nil {
+						lErr = append(lErr, err)
+						return
+					}
+				}
+			}(val)
 		}
 		return 1
 	}
