@@ -63,6 +63,9 @@ func run() error {
 		{name: "dotfiles", fxn: dotfileDiff},
 		{name: "uncommitted", fxn: uncommit},
 	} {
+		if cli.IsYes(os.Getenv(fmt.Sprintf("GIT_MOTD_DISABLE_%s", strings.ToUpper(c.name)))) {
+			continue
+		}
 		r := make(chan result)
 		c.buf = &bytes.Buffer{}
 		go func(command *cmd, res chan result) {
