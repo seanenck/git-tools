@@ -51,8 +51,12 @@ func Current(s Settings) error {
 	if s.Writer == nil {
 		return errors.New("writer is nil")
 	}
+	const key = "GIT_UNCOMMITTED"
 	switch s.Mode {
 	case "pwd":
+		if cli.IsYes(os.Getenv(key + "_NO_PROMPT")) {
+			return nil
+		}
 		wd, err := os.Getwd()
 		if err != nil {
 			return err
@@ -67,7 +71,6 @@ func Current(s Settings) error {
 	default:
 		return fmt.Errorf("unknown mode: %s", s.Mode)
 	}
-	const key = "GIT_UNCOMMITTED"
 	in := strings.TrimSpace(os.Getenv(key))
 	if in == "" {
 		return nil
