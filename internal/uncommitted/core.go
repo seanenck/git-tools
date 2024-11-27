@@ -46,14 +46,29 @@ func uncommit(stdout chan string, dir string) {
 	stdout <- ""
 }
 
+func gitGetText(path string, args ...string) string {
+	arguments := []string{"-C", path}
+	arguments = append(arguments, args...)
+	out, _ := exec.Command("git", arguments...).Output()
+	return strings.TrimSpace(string(out))
+}
+
+func isWorkTree(wd string) bool {
+	return gitGetText(wd, "rev-parse", "--is-inside-work-tree") == "true"
+}
+
 // Current will get uncommitted state information
 func Current(s Settings) error {
 	if s.Writer == nil {
 		return errors.New("writer is nil")
 	}
-	const key = "GIT_UNCOMMITTED"
+	const (
+		key            = "GIT_UNCOMMITTED"
+		nopromptConfig = "uncommitted.noprompt"
+		isNoPrompt     = "noprompt"
+	)
 	switch s.Mode {
-	case "pwd":
+	case "pwd", isNoPrompt:
 		if cli.IsYes(os.Getenv(key + "_NO_PROMPT")) {
 			return nil
 		}
@@ -61,8 +76,13 @@ func Current(s Settings) error {
 		if err != nil {
 			return err
 		}
-		valid, _ := exec.Command("git", "-C", wd, "rev-parse", "--is-inside-work-tree").Output()
-		if strings.TrimSpace(string(valid)) == "true" {
+		if isWorkTree(wd) {
+			if s.Mode == isNoPrompt {
+				return exec.Command("git", "-C", wd, "config", "--local", nopromptConfig, "true").Run()
+			}
+			if cli.IsYes(gitGetText(wd, "config", nopromptConfig)) {
+				return nil
+			}
 			set := stateSettings(wd, true, s.Writer)
 			return state.Current(set)
 		}
