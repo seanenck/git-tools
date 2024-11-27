@@ -78,7 +78,7 @@ func Current(s Settings) error {
 		}
 		if isWorkTree(wd) {
 			if s.Mode == isNoPrompt {
-				return exec.Command("git", "-C", wd, "config", "--local", nopromptConfig, "true").Run()
+				return exec.Command("git", "-C", wd, "config", nopromptConfig, "true").Run()
 			}
 			if cli.IsYes(gitGetText(wd, "config", nopromptConfig)) {
 				return nil
