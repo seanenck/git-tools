@@ -58,12 +58,13 @@ func run() error {
 		err  error
 		res  []byte
 	}
+	disabled := strings.Split(cli.GitConfigValue("motd.disable"), " ")
 	var all []chan result
 	for _, c := range []*cmd{
 		{name: "dotfiles", fxn: dotfileDiff},
 		{name: "uncommitted", fxn: uncommit},
 	} {
-		if cli.IsYes(os.Getenv(fmt.Sprintf("GIT_MOTD_DISABLE_%s", strings.ToUpper(c.name)))) {
+		if slices.Contains(disabled, c.name) {
 			continue
 		}
 		r := make(chan result)

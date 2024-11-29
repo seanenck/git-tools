@@ -46,19 +46,12 @@ func uncommit(stdout chan string, dir string) {
 	stdout <- ""
 }
 
-func gitGetText(path string, args ...string) string {
-	arguments := []string{"-C", path}
-	arguments = append(arguments, args...)
-	out, _ := exec.Command("git", arguments...).Output()
-	return strings.TrimSpace(string(out))
-}
-
 func isWorkTree() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	if gitGetText(wd, "rev-parse", "--is-inside-work-tree") == "true" {
+	if cli.GitRepoOutputText(wd, "rev-parse", "--is-inside-work-tree") == "true" {
 		return wd, nil
 	}
 	return "", nil
@@ -70,7 +63,6 @@ func Current(s Settings) error {
 		return errors.New("writer is nil")
 	}
 	const (
-		key          = "GIT_UNCOMMITTED"
 		baseConfig   = "uncommitted."
 		isPrompt     = "prompt"
 		isScan       = "scan"
@@ -80,13 +72,6 @@ func Current(s Settings) error {
 		isPromptMode = configMode + isPrompt
 		isScanMode   = configMode + isScan
 	)
-	isConfigOn := func(path, key string) bool {
-		value := gitGetText(path, "config", key)
-		if value == "" {
-			return true
-		}
-		return cli.IsYes(value)
-	}
 	switch s.Mode {
 	case isPromptMode, isScanMode:
 		wd, err := isWorkTree()
@@ -100,11 +85,11 @@ func Current(s Settings) error {
 		if s.Mode == isScanMode {
 			useKey = scanConfig
 		}
-		value := fmt.Sprintf("%t", !isConfigOn(wd, useKey))
+		value := fmt.Sprintf("%t", !cli.GitRepoBoolConfigValue(wd, useKey))
 		fmt.Printf("setting: %s = %s\n", useKey, value)
 		return exec.Command("git", "-C", wd, "config", useKey, value).Run()
 	case "pwd":
-		if cli.IsYes(os.Getenv(key + "_NO_PROMPT")) {
+		if !cli.GitBoolConfigValue(baseConfig + "prompt") {
 			return nil
 		}
 		wd, err := isWorkTree()
@@ -112,7 +97,7 @@ func Current(s Settings) error {
 			return err
 		}
 		if wd != "" {
-			if !isConfigOn(wd, promptConfig) {
+			if !cli.GitRepoBoolConfigValue(wd, promptConfig) {
 				return nil
 			}
 			set := stateSettings(wd, true, s.Writer)
@@ -123,10 +108,10 @@ func Current(s Settings) error {
 	default:
 		return fmt.Errorf("unknown mode: %s", s.Mode)
 	}
-	if cli.IsYes(os.Getenv(key + "_NO_SCAN")) {
+	if !cli.GitBoolConfigValue(baseConfig + "scan") {
 		return nil
 	}
-	in := strings.TrimSpace(os.Getenv(key))
+	in := strings.TrimSpace(cli.GitConfigValue(baseConfig + "paths"))
 	if in == "" {
 		return nil
 	}
@@ -135,7 +120,7 @@ func Current(s Settings) error {
 		return err
 	}
 	home := os.Getenv("HOME")
-	if cli.IsYes(os.Getenv(key + "_HOME")) {
+	if cli.GitBoolConfigValue(baseConfig + "home") {
 		if home == "" {
 			return errors.New("unable to process HOME, not set?")
 		}
@@ -157,7 +142,7 @@ func Current(s Settings) error {
 				if !paths.Exists(filepath.Join(childPath, ".git")) {
 					continue
 				}
-				if !isConfigOn(childPath, scanConfig) {
+				if !cli.GitRepoBoolConfigValue(childPath, scanConfig) {
 					continue
 				}
 				r := make(chan string)
