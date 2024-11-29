@@ -53,8 +53,15 @@ func gitGetText(path string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func isWorkTree(wd string) bool {
-	return gitGetText(wd, "rev-parse", "--is-inside-work-tree") == "true"
+func isWorkTree() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	if gitGetText(wd, "rev-parse", "--is-inside-work-tree") == "true" {
+		return wd, nil
+	}
+	return "", nil
 }
 
 // Current will get uncommitted state information
@@ -63,24 +70,49 @@ func Current(s Settings) error {
 		return errors.New("writer is nil")
 	}
 	const (
-		key            = "GIT_UNCOMMITTED"
-		nopromptConfig = "uncommitted.noprompt"
-		isNoPrompt     = "noprompt"
+		key          = "GIT_UNCOMMITTED"
+		baseConfig   = "uncommitted."
+		isPrompt     = "prompt"
+		isScan       = "scan"
+		configMode   = "config."
+		promptConfig = baseConfig + isPrompt
+		scanConfig   = baseConfig + isScan
+		isPromptMode = configMode + isPrompt
+		isScanMode   = configMode + isScan
 	)
-	switch s.Mode {
-	case "pwd", isNoPrompt:
-		if cli.IsYes(os.Getenv(key + "_NO_PROMPT")) {
-			return nil
+	isConfigOn := func(path, key string) bool {
+		value := gitGetText(path, "config", key)
+		if value == "" {
+			return true
 		}
-		wd, err := os.Getwd()
+		return cli.IsYes(value)
+	}
+	switch s.Mode {
+	case isPromptMode, isScanMode:
+		wd, err := isWorkTree()
 		if err != nil {
 			return err
 		}
-		if isWorkTree(wd) {
-			if s.Mode == isNoPrompt {
-				return exec.Command("git", "-C", wd, "config", nopromptConfig, "true").Run()
-			}
-			if cli.IsYes(gitGetText(wd, "config", nopromptConfig)) {
+		if wd == "" {
+			return nil
+		}
+		useKey := promptConfig
+		if s.Mode == isScanMode {
+			useKey = scanConfig
+		}
+		value := fmt.Sprintf("%t", !isConfigOn(wd, useKey))
+		fmt.Printf("setting: %s = %s\n", useKey, value)
+		return exec.Command("git", "-C", wd, "config", useKey, value).Run()
+	case "pwd":
+		if cli.IsYes(os.Getenv(key + "_NO_PROMPT")) {
+			return nil
+		}
+		wd, err := isWorkTree()
+		if err != nil {
+			return err
+		}
+		if wd != "" {
+			if !isConfigOn(wd, promptConfig) {
 				return nil
 			}
 			set := stateSettings(wd, true, s.Writer)
@@ -90,6 +122,9 @@ func Current(s Settings) error {
 	case "":
 	default:
 		return fmt.Errorf("unknown mode: %s", s.Mode)
+	}
+	if cli.IsYes(os.Getenv(key + "_NO_SCAN")) {
+		return nil
 	}
 	in := strings.TrimSpace(os.Getenv(key))
 	if in == "" {
@@ -120,6 +155,9 @@ func Current(s Settings) error {
 			for _, child := range children {
 				childPath := filepath.Join(path, child.Name())
 				if !paths.Exists(filepath.Join(childPath, ".git")) {
+					continue
+				}
+				if !isConfigOn(childPath, scanConfig) {
 					continue
 				}
 				r := make(chan string)
