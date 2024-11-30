@@ -58,13 +58,13 @@ func run() error {
 		err  error
 		res  []byte
 	}
-	disabled := strings.Split(cli.GitConfigValue("motd.disable"), " ")
+	enabled := strings.Split(cli.GitConfigValue("motd.enable"), " ")
 	var all []chan result
 	for _, c := range []*cmd{
 		{name: "dotfiles", fxn: dotfileDiff},
 		{name: "uncommitted", fxn: uncommit},
 	} {
-		if slices.Contains(disabled, c.name) {
+		if !slices.Contains(enabled, c.name) {
 			continue
 		}
 		r := make(chan result)
