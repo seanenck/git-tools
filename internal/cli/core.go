@@ -54,7 +54,7 @@ func GitBoolConfigValue(key string) bool {
 
 func gitToBool(value string) bool {
 	if value == "" {
-		return true
+		return false
 	}
 	return IsYes(value)
 }
