@@ -33,7 +33,11 @@ jobs:
         run: just clean default
       - name: "compress"
         run: "tar czvf git-tools-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C target/ ."
+      - name: "hashes"
+        run: "sha256sum *.tar.gz >> git-tools-${{ matrixo.goos }}-${{ matrix.goarch}}.sha256sum"
       - name: release
         uses: softprops/action-gh-release@v2
         with:
-          files: git-tools-*.tar.gz
+          files: |
+            git-tools-*.tar.gz
+            git-tools-*.sha256sum
