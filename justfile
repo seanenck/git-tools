@@ -1,7 +1,7 @@
 goflags := "-trimpath -buildmode=pie -mod=readonly -modcacherw -buildvcs=false"
 objects := "target"
 
-default: (build "git-uncommitted") (build "git-current-state") (build "git-dotfiles") (build "git-motd")
+default: (build "git-uncommitted") (build "git-current-state") (build "git-motd")
 
 build target:
   @echo 'Building {{target}}...'
