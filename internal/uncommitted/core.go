@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,12 +134,22 @@ func Current(s Settings) error {
 		wg.Add(1)
 		go func(path string) {
 			defer wg.Done()
-			children, err := os.ReadDir(path)
+			var children []fs.DirEntry
+			stats, err := os.Stat(path)
 			if err != nil {
 				return
 			}
-			for _, child := range children {
-				childPath := filepath.Join(path, child.Name())
+			children = append(children, fs.FileInfoToDirEntry(stats))
+			subs, err := os.ReadDir(path)
+			if err != nil {
+				return
+			}
+			children = append(children, subs...)
+			for idx, child := range children {
+				childPath := path
+				if idx > 0 {
+					childPath = filepath.Join(childPath, child.Name())
+				}
 				if !paths.Exists(filepath.Join(childPath, ".git")) {
 					continue
 				}
