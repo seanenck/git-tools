@@ -1,4 +1,4 @@
-// Package main handles a git motd for repository status+dotfiles
+// Package main handles a git motd for repository status
 package main
 
 import (
@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/seanenck/git-tools/internal/cli"
-	"github.com/seanenck/git-tools/internal/dotfiles"
 	"github.com/seanenck/git-tools/internal/uncommitted"
 )
 
@@ -30,13 +29,6 @@ func (c *cmd) Write(data []byte) (int, error) {
 	}
 	fmt.Fprint(c.buf, string(data))
 	return len(data), nil
-}
-
-func dotfileDiff(w io.Writer) error {
-	settings := dotfiles.Settings{}
-	settings.Mode = dotfiles.DiffMode
-	settings.Writer = w
-	return dotfiles.Do(settings)
 }
 
 func uncommit(w io.Writer) error {
@@ -61,7 +53,6 @@ func run() error {
 	enabled := strings.Split(cli.GitConfigValue("motd.enable"), " ")
 	var all []chan result
 	for _, c := range []*cmd{
-		{name: "dotfiles", fxn: dotfileDiff},
 		{name: "uncommitted", fxn: uncommit},
 	} {
 		if !slices.Contains(enabled, c.name) {
