@@ -16,10 +16,6 @@ has (potentially) uncommitted changes
 
 Is the backend for `git-uncommitted` that processes state of a repository
 
-### git-dotfiles
-
-Handles deploying dotfiles
-
 ### git-motd
 
 Provides a shell startup "message of the day" (based on other commands)
